@@ -120,7 +120,11 @@ class SigmoidLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        
+        output_of_the_sigmoid_fce = 1.0 / (1.0 + np.exp(-x))
+        # Used for backward(self, grad_z)
+        self._cache_current = output_of_the_sigmoid_fce 
+        return output_of_the_sigmoid_fce
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -143,7 +147,8 @@ class SigmoidLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        
+        return self._cache_current * (1.0 - self._cache_current) * grad_z
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -177,7 +182,14 @@ class ReluLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        # Reference: https://numpy.org/doc/stable/reference/generated/numpy.maximum.html
+        # Compare all values in matrix x with value 0 and takes the maximum.
+        # Intuitivelly, this max sure neither of the output values are negative.
+        # That is the behaviour of refu fce. 
+        output_of_the_relu_fce = np.maximum(0, x) 
+        # USed for backward(self, grad_z):
+        self._cache_current = x 
+        return output_of_the_relu_fce
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -200,7 +212,12 @@ class ReluLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        
+        filtering_only_negative = (self._cache_current <= 0)
+        # Relu:
+        # We want to set all the negative values in grad_z to 0: 
+        grad_z[filtering_only_negative] = 0
+        return grad_z
 
         #######################################################################
         #                       ** END OF YOUR CODE **
