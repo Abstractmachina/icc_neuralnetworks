@@ -679,7 +679,10 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        
+        # Initialise variables for min-max scaling normalisation:
+        self.x_max = np.max(data, axis = 0)
+        self.x_min = np.min(data, axis = 0)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -698,7 +701,12 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        
+        # MIN MAX Scaling:
+        # x' = (x - min(x)) / (max(x) - min(x))
+
+        min_max_scaled_data = (data - self.x_min) / (self.x_max - self.x_min)
+        return min_max_scaled_data
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -717,7 +725,17 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        
+        # MIN MAX Scaling:
+        # x' = (x - min(x)) / (max(x) - min(x))
+
+        # Revert (solve for x):
+        # x' * (max(x) - min(x)) = (x - min(x))
+        # x' * (max(x) - min(x)) + min(x) = x
+        # x = x' * (max(x) - min(x)) + min(x)
+
+        reverted_data = data * (self.x_max - self.x_min) + self.x_min  
+        return reverted_data      
 
         #######################################################################
         #                       ** END OF YOUR CODE **
