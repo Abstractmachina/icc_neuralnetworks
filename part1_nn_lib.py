@@ -229,6 +229,11 @@ class LinearLayer(Layer):
         self._W = None
         self._b = None
 
+        # Using Xavier function provided above, 
+        # initialises network weight randomly based on uniform distrobution:
+        self._W = xavier_init((n_in, n_out), 1.0) # Weights matrix
+        self._b = xavier_init((1, n_out), 1.0)    # Bias (error terms)
+
         self._cache_current = None
         self._grad_W_current = None
         self._grad_b_current = None
@@ -253,7 +258,11 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        
+         # Wx + b; rewritten as xW + b to match dim of the matrices x and W:
+        outputs_of_the_layer = x.dot(self._W) + self._b
+        self._cache_current = self._W, x # needed in backward(self, grad_z)
+        return outputs_of_the_layer
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -276,7 +285,11 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+
+        w, a = self._cache_current
+        self._grad_W_current = (a.transpose()).dot(grad_z)
+        self._grad_b_current = np.sum(grad_z, axis = 0)
+        return grad_z.dot(w.transpose())
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -293,7 +306,10 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        
+        # Gradient descent (one step) to get a new value for weights matrix and bias:
+        self._W -= learning_rate * self._grad_W_current
+        self._b -= learning_rate * self._grad_b_current
 
         #######################################################################
         #                       ** END OF YOUR CODE **
