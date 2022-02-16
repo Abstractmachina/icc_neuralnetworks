@@ -1,3 +1,4 @@
+from chainer import grad
 import numpy as np
 import pickle
 
@@ -122,7 +123,7 @@ class SigmoidLayer(Layer):
         #######################################################################
         
         output_of_the_sigmoid_fce = 1.0 / (1.0 + np.exp(-x))
-        # Used for backward(self, grad_z)
+        # Used for backward(self, grad_z):
         self._cache_current = output_of_the_sigmoid_fce 
         return output_of_the_sigmoid_fce
 
@@ -359,7 +360,31 @@ class MultiLayerNetwork(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
+        
         self._layers = None
+        number_of_layers = len(neurons)
+        layers_list = list()
+
+        for i in range(number_of_layers):
+            # Linear Layers: 
+            if i == 0:
+                linear_layer = LinearLayer(input_dim, neurons[0])
+            else:
+                linear_layer = LinearLayer(neurons[i-1], neurons[i])
+            # Activation functions:
+            if activations[i] == "relu":
+                activation = ReluLayer()
+            elif activations[i] == "sigmoid":
+                activation = SigmoidLayer()
+            else:
+                # Mirroring input values to an identical output values 
+                # (as if no activation fce was present):
+                activation = "identity" # taken from example_main()
+            layers_list.append((linear_layer, activation))
+        
+        # Represents a list of tuples. Each tuple has two items: linear_layer and activation fce:
+        self._layers = layers_list # layer instances
+
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
@@ -378,7 +403,13 @@ class MultiLayerNetwork(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        return np.zeros((1, self.neurons[-1])) # Replace with your own code
+
+        # a_tuple represents: (linear_layer i, activation fce i)
+        for a_tuple in self._layers: 
+            x = a_tuple[0].forward(x)
+            x = x if a_tuple[1] == "identity" else a_tuple[1].forward(x)
+
+        return x
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -402,7 +433,11 @@ class MultiLayerNetwork(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+
+        # a_tuple i represents: (linear_layer i, activation fce i)
+        for a_tuple in reversed(self._layers):
+            grad_z = grad_z if a_tuple[1] == "identity" else a_tuple[1].backward(grad_z) 
+            grad_z = a_tuple[0].backward(grad_z)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -419,7 +454,10 @@ class MultiLayerNetwork(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+
+        # a_tuple i represents: (linear_layer i, activation fce i)
+        for a_tuple in self._layers:
+            a_tuple[0].update_params(learning_rate)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
