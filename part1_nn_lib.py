@@ -518,7 +518,15 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
+        
         self._loss_layer = None
+
+        if loss_fun == "mse":
+            self._loss_layer  = MSELossLayer()
+    
+        if loss_fun == "bce":
+            self._loss_layer = CrossEntropyLossLayer()
+
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
@@ -541,7 +549,18 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+
+        # Obtain evenly spaced values within a given interval:
+        index = np.arange(len(input_dataset))
+
+        # Randomly shuffles the index:
+        np.random.shuffle(index)
+
+        # Shuffles the input and target dataset according to the shuffled index:
+        input_dataset = input_dataset[index]
+        target_dataset = target_dataset[index]
+
+        return input_dataset, target_dataset
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -570,7 +589,40 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        
+        for epoch_index in range(self.nb_epoch):
+            # By instruction; if shuffle_flag == True, 
+            # shuffle the provided dataset using the shuffle method:
+            if self.shuffle_flag == True:
+                input_dataset, target_dataset = self.shuffle(input_dataset, target_dataset)
+            # Split the provided dataset into minibatches of size batch_size 
+            # and train the network using minibatch gradient descent:
+            loss_list = list()
+            number_of_minibatches = (input_dataset.shape[0] // self.batch_size)
+            for i in range(number_of_minibatches):
+                start = i * self.batch_size
+                end = (i + 1) * self.batch_size
+                x_train = input_dataset[start:end]
+                y = target_dataset[start:end]
+                y_output = self.network(x_train)
+                # Performs forward pass through the network given the current
+                # batch of inputs:
+                if self.loss_fun == "mse":
+                    # Computes loss:
+                    loss = self._loss_layer.forward(y_output, y)
+                if self.loss_fun == "bce":
+                    # Computes loss:
+                    loss = self._loss_layer.forward(y_output, y)
+                loss_list.append(loss)
+                # Performs backward pass to compute gradients of loss with
+                # respect to parameters of network:
+                grad_z = self._loss_layer.backward()
+                self.network.backward(grad_z)
+                # Performs one step of gradient descent on the network parameters: 
+                self.network.update_params(self.learning_rate)
+            # Comment out for final submission:
+            if epoch_index % 8 == 0:
+                print("For epoch: {} the loss is: {}".format(epoch_index, loss))
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -593,7 +645,16 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        pass
+        
+        y_output= self.network(input_dataset)
+
+        if self.loss_fun == "mse":
+            loss = self._loss_layer.forward(y_output, target_dataset)
+        if self.loss_fun == "bce":
+            y_pred = CrossEntropyLossLayer.softmax(y_output)
+            loss = self._loss_layer.forward(y_pred, target_dataset)
+        
+        return loss
 
         #######################################################################
         #                       ** END OF YOUR CODE **
