@@ -1,12 +1,14 @@
 import torch
+from torch import nn, tensor
 import pickle
 import numpy as np
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
+from sklearn.model_selection import train_test_split
 
-class Regressor():
+class Regressor(nn.Module):
 
-    def __init__(self, x, number_of_epochs = 1000):
+    def __init__(self, x, nb_epoch = 1000):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """
@@ -24,12 +26,24 @@ class Regressor():
         #                       ** START OF YOUR CODE **
         #######################################################################
 
-        # Replace this code with your own
+        super().__init__()
+
+        self.x_scaler = StandardScaler()
+        self.y_scaler = StandardScaler()
         X, _ = self._preprocessor(x, training = True)
-        self.input_size = X.shape[1] # number of rows, but what does this do?
-        self.output_size = 1 # What does this do???
-        self.number_of_epochs = number_of_epochs
-        self.scaler = StandardScaler()
+        self.input_size = X.shape[1]
+        self.output_size = 1
+        self.number_of_epochs = nb_epoch
+
+        # sample for the model that we want to create
+        self.model = nn.Sequential(
+            nn.Linear(self.input_size, 10),
+            nn.Sigmoid(),
+            nn.Linear(10, 10),
+            nn.Sigmoid(),
+            nn.Linear(10, self.output_size)
+        )
+
         return
 
         #######################################################################
@@ -59,41 +73,32 @@ class Regressor():
         #                       ** START OF YOUR CODE **
         #######################################################################
 
-        # Replace this code with your own
-
         # add one hot encoding to allow the model to work with text categories
         one_hot_area = pd.get_dummies(x['ocean_proximity'], prefix="area")
+        
         x = pd.merge(x, one_hot_area, left_index=True, right_index=True)
-
+        
         # We're going to fill the nan values with the average value of the column
         x = x.fillna(x.mean())
-
+        
         # unnecessary column, we've one hot encoded it now
         x = x.drop(['ocean_proximity'], axis=1)
-
-        # we want to preserve the column names if possible so just storing them here for now.
-        x_columns = list(x.columns)
-        one_hot_area_columns = list(one_hot_area.columns)
-        x_columns.extend(one_hot_area_columns)
-
-
+        
         # logic to separate out training data from test data
         if training:
-            x = pd.DataFrame(self.scaler.fit_transform(x))
+            x = self.x_scaler.fit_transform(x)
         else:
-            x = pd.DataFrame(self.scaler.transform(x))
+            x = self.x_scaler.transform(x)
 
-        # merge the one hot encoded data with the standardised data
-        x = pd.merge(x, one_hot_area, left_index=True, right_index=True)
-        x.columns = x_columns     
-
-        # Return preprocessed x and y, return None for y if it was None
-        return x, (y if isinstance(y, pd.DataFrame) else None)
+        if y is not None:
+            y = self.y_scaler.fit_transform(y)
+        
+        # Return preprocessed x and y
+        return x, y
 
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
-
 
     def fit(self, x, y):
         """
@@ -114,6 +119,33 @@ class Regressor():
         #######################################################################
 
         X, Y = self._preprocessor(x, y = y, training = True) # Do not forget
+        print(type(X), type(Y))
+        X = torch.from_numpy(X).float()
+        Y = torch.from_numpy(Y).float()
+
+
+        
+        optimiser = torch.optim.SGD(self.model.parameters(), lr=0.0001)
+        criterion = torch.nn.MSELoss()
+
+        for epoch in range(self.number_of_epochs):
+            # Reset the gradients 
+            optimiser.zero_grad()   
+            
+            # forward pass
+            y_hat = self.model(X)
+            
+            # compute loss
+            loss = criterion(y_hat, Y) 
+
+            # Backward pass (compute the gradients)
+            loss.backward()
+
+            # update parameters
+            optimiser.step()
+
+            print(f"L: {loss:.4f}")
+
         return self
 
         #######################################################################
@@ -139,7 +171,14 @@ class Regressor():
         #######################################################################
 
         X, _ = self._preprocessor(x, training = False) # Do not forget
-        pass
+        X = torch.from_numpy(X).float()
+
+        normalised_y_predictions = self.model(X)
+
+        #denormalise the predictions, to get something useful for comparisons
+        y_predictions = self.y_scaler.inverse_transform(normalised_y_predictions.detach().numpy())
+
+        return y_predictions
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -164,6 +203,7 @@ class Regressor():
         #######################################################################
 
         X, Y = self._preprocessor(x, y = y, training = False) # Do not forget
+
         return 0 # Replace this code with your own
 
         #######################################################################
@@ -229,19 +269,29 @@ def example_main():
     data = pd.read_csv("housing.csv")
 
     # Spliting input and output
-    x_train = data.loc[:, data.columns != output_label]
-    y_train = data.loc[:, [output_label]]
+    x = data.loc[:, data.columns != output_label]
+    y = data.loc[:, [output_label]]
+
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, random_state=42)
 
     # Training
     # This example trains on the whole available dataset.
     # You probably want to separate some held-out data
     # to make sure the model isn't overfitting
-    regressor = Regressor(x_train, nb_epoch = 10)
+    regressor = Regressor(x_train, nb_epoch = 250)
     regressor.fit(x_train, y_train)
     save_regressor(regressor)
 
+    # Predictions - type shifting is so annoying, we're forcing y_predictions from np.array to pd.DataFrame here
+    y_predictions = pd.DataFrame(regressor.predict(x_test))
+    y_comparison = pd.merge(y_predictions, y_test, left_index=True, right_index=True)
+    
+    print(y_comparison)
+
+
+
     # Error
-    error = regressor.score(x_train, y_train)
+    error = regressor.score(x_test, y_test)
     print("\nRegressor error: {}\n".format(error))
 
 
