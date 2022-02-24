@@ -119,11 +119,9 @@ class Regressor(nn.Module):
         #######################################################################
 
         X, Y = self._preprocessor(x, y = y, training = True) # Do not forget
-        print(type(X), type(Y))
+        
         X = torch.from_numpy(X).float()
         Y = torch.from_numpy(Y).float()
-
-
         
         optimiser = torch.optim.SGD(self.model.parameters(), lr=0.0001)
         criterion = torch.nn.MSELoss()
@@ -144,7 +142,7 @@ class Regressor(nn.Module):
             # update parameters
             optimiser.step()
 
-            print(f"L: {loss:.4f}")
+            # print(f"L: {loss:.4f}")
 
         return self
 
@@ -273,13 +271,12 @@ def example_main():
     y = data.loc[:, [output_label]]
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, random_state=42)
-
-    # Training
-    # This example trains on the whole available dataset.
-    # You probably want to separate some held-out data
-    # to make sure the model isn't overfitting
+    print(type(x_train))
+    # Create the regressor model
     regressor = Regressor(x_train, nb_epoch = 250)
+    # fit the model based on our held out training set
     regressor.fit(x_train, y_train)
+    # save it for later
     save_regressor(regressor)
 
     # Predictions - type shifting is so annoying, we're forcing y_predictions from np.array to pd.DataFrame here
