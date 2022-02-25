@@ -122,10 +122,10 @@ class SigmoidLayer(Layer):
         #                       ** START OF YOUR CODE **
         #######################################################################
         
-        output_of_the_sigmoid_fce = 1.0 / (1.0 + np.exp(-x))
+        output_sigmoid_func = 1.0 / (1.0 + np.exp(-x))
         # Used for backward(self, grad_z):
-        self._cache_current = output_of_the_sigmoid_fce 
-        return output_of_the_sigmoid_fce
+        self._cache_current = output_sigmoid_func 
+        return output_sigmoid_func
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -186,11 +186,12 @@ class ReluLayer(Layer):
         # Reference: https://numpy.org/doc/stable/reference/generated/numpy.maximum.html
         # Compare all values in matrix x with value 0 and takes the maximum.
         # Intuitivelly, this max sure neither of the output values are negative.
-        # That is the behaviour of refu fce. 
-        output_of_the_relu_fce = np.maximum(0, x) 
+        # That is the behaviour of refu 
+        # . 
+        output_relu_func = np.maximum(0, x) 
         # USed for backward(self, grad_z):
         self._cache_current = x 
-        return output_of_the_relu_fce
+        return output_relu_func
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -438,6 +439,9 @@ class MultiLayerNetwork(object):
         for a_tuple in reversed(self._layers):
             grad_z = grad_z if a_tuple[1] == "identity" else a_tuple[1].backward(grad_z) 
             grad_z = a_tuple[0].backward(grad_z)
+        
+        #TODO: return?
+        #return grad_z
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -607,6 +611,7 @@ class Trainer(object):
                 y_output = self.network(x_train)
                 # Performs forward pass through the network given the current
                 # batch of inputs:
+                """
                 if self.loss_fun == "mse":
                     # Computes loss:
                     loss = self._loss_layer.forward(y_output, y)
@@ -614,6 +619,9 @@ class Trainer(object):
                     # Computes loss:
                     loss = self._loss_layer.forward(y_output, y)
                 loss_list.append(loss)
+                """
+                if self.loss_fun == "mse" or self.loss_fun =="bce":
+                    loss = self._loss_layer.forward(y_output, y)
                 # Performs backward pass to compute gradients of loss with
                 # respect to parameters of network:
                 grad_z = self._loss_layer.backward()
