@@ -37,18 +37,24 @@ class Regressor(nn.Module):
 
         # sample for the model that we want to create
         self.model = nn.Sequential(
-            nn.Linear(self.input_size, 10),
-            nn.Sigmoid(),
-            nn.Linear(10, 10),
-            nn.Sigmoid(),
+            nn.Linear(self.input_size, 25),
+            nn.ReLU(),
+            nn.Linear(25, 10),
+            nn.ReLU(),
             nn.Linear(10, self.output_size)
         )
+
 
         return
 
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
+
+    def forward(self, x):
+        x = self.flatten(x)
+        logits = self.linear_relu_stack(x)
+        return logits
 
     def _preprocessor(self, x, y = None, training = False):
         """
@@ -72,6 +78,15 @@ class Regressor(nn.Module):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
+        if y is not None:
+            #merge the two, drop the outlying house values
+            combined = pd.merge(x, y, left_index=True, right_index=True)
+            combined = combined[combined["median_house_value"] != 500001] 
+
+            # create our x and y again
+            x = combined.drop(columns=["median_house_value"])
+            y = pd.DataFrame(combined["median_house_value"])
+
 
         # add one hot encoding to allow the model to work with text categories
         one_hot_area = pd.get_dummies(x['ocean_proximity'], prefix="area")
@@ -83,8 +98,23 @@ class Regressor(nn.Module):
         
         # unnecessary column, we've one hot encoded it now
         x = x.drop(['ocean_proximity'], axis=1)
+
+        # getting the per-household values as these are more insightful
+        x["total_rooms"] = x["total_rooms"] / x["households"]
+        x["total_bedrooms"] = x["total_bedrooms"] / x["households"]
+        x["population"] = x["population"] / x["households"]
+
+
+        # We believe that the households column confers no useful information for the model
+        # so we're dropping it, having used it to get per-household figures elsewhere
+        x.drop(columns=["households"], inplace=True)
+
+        x.rename(columns = {"total_rooms":"rooms_per_household", 
+                "total_bedrooms":"bedrooms_per_household", 
+                "population":"residents_per_household"}, inplace=True)
         
-        # logic to separate out training data from test data
+        # logic to separate out training data from test data and scale by
+        # standardisation
         if training:
             x = self.x_scaler.fit_transform(x)
         else:
@@ -123,18 +153,17 @@ class Regressor(nn.Module):
         X = torch.from_numpy(X).float()
         Y = torch.from_numpy(Y).float()
         
-        optimiser = torch.optim.SGD(self.model.parameters(), lr=0.0001)
+        optimiser = torch.optim.SGD(self.model.parameters(), lr=0.0005)
         criterion = torch.nn.MSELoss()
 
         for epoch in range(self.number_of_epochs):
-            # Reset the gradients 
-            optimiser.zero_grad()   
-            
             # forward pass
             y_hat = self.model(X)
-            
             # compute loss
             loss = criterion(y_hat, Y) 
+
+            # Reset the gradients 
+            optimiser.zero_grad() 
 
             # Backward pass (compute the gradients)
             loss.backward()
@@ -142,7 +171,7 @@ class Regressor(nn.Module):
             # update parameters
             optimiser.step()
 
-            # print(f"L: {loss:.4f}")
+            print(f"L: {loss:.4f}")
 
         return self
 
@@ -201,7 +230,6 @@ class Regressor(nn.Module):
         #######################################################################
 
         X, Y = self._preprocessor(x, y = y, training = False) # Do not forget
-
         return 0 # Replace this code with your own
 
         #######################################################################
@@ -271,22 +299,25 @@ def example_main():
     y = data.loc[:, [output_label]]
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, random_state=42)
-    print(type(x_train))
     # Create the regressor model
-    regressor = Regressor(x_train, nb_epoch = 250)
+    regressor = Regressor(x_train, nb_epoch = 5000)
+
     # fit the model based on our held out training set
     regressor.fit(x_train, y_train)
     # save it for later
     save_regressor(regressor)
+    # regressor = load_regressor()
 
     # Predictions - type shifting is so annoying, we're forcing y_predictions from np.array to pd.DataFrame here
+    # most of this is just me fiddling to try to get something resembling a metric
     y_predictions = pd.DataFrame(regressor.predict(x_test))
-    y_comparison = pd.merge(y_predictions, y_test, left_index=True, right_index=True)
-    
-    print(y_comparison)
+    y_predictions = pd.merge(y_predictions, y_test, left_index=True, right_index=True)
+    y_predictions.columns = ["predicted", "gold"]
+    y_predictions["difference"] = (y_predictions["gold"] - y_predictions["predicted"]).apply(abs)
 
-
-
+    mean_error = y_predictions["difference"].mean()
+    print("mean error is:", mean_error)
+    print(y_predictions[["gold", "predicted"]])
     # Error
     error = regressor.score(x_test, y_test)
     print("\nRegressor error: {}\n".format(error))
