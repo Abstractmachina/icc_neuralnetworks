@@ -4,12 +4,13 @@ import pickle
 import numpy as np
 from numpy.random import default_rng
 import pandas as pd
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_squared_error
 
 class Regressor(nn.Module):
 
-    def __init__(self, x, nb_epoch = 1000, nb_batches = 50):
+    def __init__(self, x, nb_epoch = 200, nb_batches = 500):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """
@@ -88,15 +89,20 @@ class Regressor(nn.Module):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
+        print("Just entering processor, x shape: ", x.shape)
+        
+        #This filters out certain columns in Score, but not in predict.
         if y is not None:
             #merge the two, drop the outlying house values
+            print("Just entering processor, y shape: ", y.shape)
             combined = pd.merge(x, y, left_index=True, right_index=True)
             combined = combined[combined["median_house_value"] != 500001] 
 
             # create our x and y again
             x = combined.drop(columns=["median_house_value"])
             y = pd.DataFrame(combined["median_house_value"])
-
+            print("in processor, y shape: ", y.shape)
+            print("in processor, x shape: ", x.shape)
 
         # add one hot encoding to allow the model to work with text categories
         one_hot_area = pd.get_dummies(x['ocean_proximity'], prefix="area")
@@ -129,11 +135,15 @@ class Regressor(nn.Module):
             x = self.x_scaler.fit_transform(x)
         else:
             x = self.x_scaler.transform(x)
-
+        print("in processor after done, x shape: ", x.shape)
         if y is not None and training:
             y = self.y_scaler.fit_transform(y)
+            print("in processor after done, y shape: ", y.shape)
+
         elif y is not None:
             y = self.y_scaler.transform(y)
+            print("in processor after done, y shape: ", y.shape)
+
         
         # Return preprocessed x and y
         return x, y
@@ -162,7 +172,7 @@ class Regressor(nn.Module):
 
         X, Y = self._preprocessor(x, y = y, training = True) # Do not forget
         print("Type of X: ", type(X), ": and shape: ", X.shape)
-
+        print("Type of Y: ", type(Y), ": and shape: ", Y.shape)
         # I think we should split our data into batches here
 
         '''X = torch.from_numpy(X).float()
@@ -176,9 +186,8 @@ class Regressor(nn.Module):
         rg = default_rng(seed)
 
         for epoch in range(self.number_of_epochs):
-            # forward pass
-            # split the dataset into specific number of batches
             
+            # shuffle split the dataset into specific number of batches
             X, Y = self.shuffle_data(X, Y, random_generator=rg)
             #print("Shape: ", X.shape, Y.shape, "Type: ", type(X))
             X_batches = np.array_split(X, self.number_of_batches)
@@ -192,6 +201,7 @@ class Regressor(nn.Module):
                 X_batches[batch_no] = torch.from_numpy(X).float()
                 Y_batches[batch_no] = torch.from_numpy(Y).float()
 
+                # forward pass
                 y_hat = self.model(X_batches[batch_no])
                 # compute loss
                 loss = criterion(y_hat, Y_batches[batch_no]) 
@@ -215,7 +225,7 @@ class Regressor(nn.Module):
         #######################################################################
 
 
-    def predict(self, x):
+    def predict(self, x, y=None):
         """
         Output the value corresponding to an input x.
 
@@ -231,8 +241,9 @@ class Regressor(nn.Module):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-
-        X, _ = self._preprocessor(x, training = False) # Do not forget
+        print("Predict function: entering processing:")
+        X, _ = self._preprocessor(x, y, training = False) # Do not forget
+        print("X shape after preprocessing in predict: ", X.shape)
         X = torch.from_numpy(X).float()
 
         normalised_y_predictions = self.model(X)
@@ -263,9 +274,20 @@ class Regressor(nn.Module):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
+        print("Score function, entering processor:")
+        _, Y = self._preprocessor(x, y = y, training = False) # Do not forget
+        
+        print("x shape before processing in score: ", x.shape)
+        print("y shape before processing in score: ", y.shape)
+        y_hat = pd.DataFrame(self.predict(x, y))
+        
+        print("Y shape after processing in score: ", Y.shape)
+        print("predictions shape: ", y_hat.shape)
 
-        X, Y = self._preprocessor(x, y = y, training = False) # Do not forget
-        return 0 # Replace this code with your own
+        return mean_squared_error(Y, y_hat)
+        #return 0
+
+        #return 0 # Replace this code with your own
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -335,7 +357,7 @@ def example_main():
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, random_state=42)
     # Create the regressor model
-    regressor = Regressor(x_train, nb_epoch = 800)
+    regressor = Regressor(x_train, nb_epoch = 200)
 
     # fit the model based on our held out training set
     regressor.fit(x_train, y_train)
@@ -353,6 +375,7 @@ def example_main():
     mean_error = y_predictions["difference"].mean()
     print("mean error is:", mean_error)
     print(y_predictions[["gold", "predicted"]])
+
     # Error
     error = regressor.score(x_test, y_test)
     print("\nRegressor error: {}\n".format(error))
