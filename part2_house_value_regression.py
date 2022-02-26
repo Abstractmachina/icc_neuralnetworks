@@ -2,13 +2,14 @@ import torch
 from torch import nn, tensor
 import pickle
 import numpy as np
+from numpy.random import default_rng
 import pandas as pd
 from sklearn.preprocessing import StandardScaler
 from sklearn.model_selection import train_test_split
 
 class Regressor(nn.Module):
 
-    def __init__(self, x, nb_epoch = 1000):
+    def __init__(self, x, nb_epoch = 1000, nb_batches = 50):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """
@@ -34,6 +35,7 @@ class Regressor(nn.Module):
         self.input_size = X.shape[1]
         self.output_size = 1
         self.number_of_epochs = nb_epoch
+        self.number_of_batches = nb_batches
 
         # sample for the model that we want to create
         self.model = nn.Sequential(
@@ -50,6 +52,14 @@ class Regressor(nn.Module):
         #######################################################################
         #                       ** END OF YOUR CODE **
         #######################################################################
+    # def get_params(self,):
+    # return dictionary of hyperparameters you want to pass
+
+    def shuffle_data(self, x, y, random_generator=default_rng()):
+        shuffled_indices = random_generator.permutation(len(x))
+        x_shuffled = x[shuffled_indices]
+        y_shuffled = y[shuffled_indices]
+        return x_shuffled, y_shuffled
 
     def forward(self, x):
         x = self.flatten(x)
@@ -120,8 +130,10 @@ class Regressor(nn.Module):
         else:
             x = self.x_scaler.transform(x)
 
-        if y is not None:
+        if y is not None and training:
             y = self.y_scaler.fit_transform(y)
+        elif y is not None:
+            y = self.y_scaler.transform(y)
         
         # Return preprocessed x and y
         return x, y
@@ -149,29 +161,52 @@ class Regressor(nn.Module):
         #######################################################################
 
         X, Y = self._preprocessor(x, y = y, training = True) # Do not forget
+        print("Type of X: ", type(X), ": and shape: ", X.shape)
+
+        # I think we should split our data into batches here
+
+        '''X = torch.from_numpy(X).float()
+        Y = torch.from_numpy(Y).float()'''
         
-        X = torch.from_numpy(X).float()
-        Y = torch.from_numpy(Y).float()
-        
-        optimiser = torch.optim.SGD(self.model.parameters(), lr=0.0005)
+        optimiser = torch.optim.SGD(self.model.parameters(), lr=0.01)
         criterion = torch.nn.MSELoss()
+
+        #shuffle seed
+        seed = 60012
+        rg = default_rng(seed)
 
         for epoch in range(self.number_of_epochs):
             # forward pass
-            y_hat = self.model(X)
-            # compute loss
-            loss = criterion(y_hat, Y) 
+            # split the dataset into specific number of batches
+            
+            X, Y = self.shuffle_data(X, Y, random_generator=rg)
+            #print("Shape: ", X.shape, Y.shape, "Type: ", type(X))
+            X_batches = np.array_split(X, self.number_of_batches)
+            Y_batches = np.array_split(Y, self.number_of_batches)
+            #print("Shape: ", X_batches[0].shape, X_batches[1].shape, "Type: ", type(X_batches[0]))
 
-            # Reset the gradients 
-            optimiser.zero_grad() 
+            #convert to torch tensors
 
-            # Backward pass (compute the gradients)
-            loss.backward()
+            for batch_no in range(self.number_of_batches):
+                #convert to torch tensors
+                X_batches[batch_no] = torch.from_numpy(X).float()
+                Y_batches[batch_no] = torch.from_numpy(Y).float()
 
-            # update parameters
-            optimiser.step()
+                y_hat = self.model(X_batches[batch_no])
+                # compute loss
+                loss = criterion(y_hat, Y_batches[batch_no]) 
 
-            print(f"L: {loss:.4f}")
+                # Reset the gradients 
+                optimiser.zero_grad() 
+
+                # Backward pass (compute the gradients)
+                loss.backward()
+
+                # update parameters
+                optimiser.step()
+
+            if(epoch % 10 == 0):
+                print(f"L: {loss:.4f}")
 
         return self
 
@@ -300,7 +335,7 @@ def example_main():
 
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.3, random_state=42)
     # Create the regressor model
-    regressor = Regressor(x_train, nb_epoch = 5000)
+    regressor = Regressor(x_train, nb_epoch = 800)
 
     # fit the model based on our held out training set
     regressor.fit(x_train, y_train)
