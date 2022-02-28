@@ -11,7 +11,7 @@ from sklearn.model_selection import GridSearchCV
 
 class Regressor(nn.Module):
 
-    def __init__(self, x, nb_epoch = 200, nb_batches = 500):
+    def __init__(self, x, nb_epoch = 200, size_of_batch = 400):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """
@@ -37,19 +37,18 @@ class Regressor(nn.Module):
         self.input_size = X.shape[1]
         self.output_size = 1
         self.number_of_epochs = nb_epoch
-        self.number_of_batches = nb_batches
+        self.size_of_batches = size_of_batch
         self.param_grid = {'epochs': [100, 150, 200, 250, 300, 350, 400, 450, 500, 550], 'learn_rate': [0.1, 0.01, 0.001, 0.0001], 'batches': [100, 200, 300, 400, 500, 600, 700, 800]}
         
 
         # sample for the model that we want to create
         self.model = nn.Sequential(
-            nn.Linear(self.input_size, 25),
+            nn.Linear(self.input_size, 8),
             nn.ReLU(),
-            nn.Linear(25, 10),
+            nn.Linear(8, 5),
             nn.ReLU(),
-            nn.Linear(10, self.output_size)
+            nn.Linear(5, self.output_size)
         )
-
 
         return
 
@@ -65,10 +64,10 @@ class Regressor(nn.Module):
         y_shuffled = y[shuffled_indices]
         return x_shuffled, y_shuffled
 
-    def forward(self, x):
-        x = self.flatten(x)
+    '''def forward(self, x):
+        #x = self.flatten(x)
         logits = self.linear_relu_stack(x)
-        return logits
+        return logits'''
 
     def _preprocessor(self, x, y = None, training = False):
         """
@@ -92,31 +91,24 @@ class Regressor(nn.Module):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        print("Just entering processor, x shape: ", x.shape)
+        #print("Just entering processor, x shape: ", x.shape)
         
         #This filters out certain columns in Score, but not in predict.
         if y is not None:
             #merge the two, drop the outlying house values
-            print("Just entering processor, y shape: ", y.shape)
+            #print("Just entering processor, y shape: ", y.shape)
             combined = pd.merge(x, y, left_index=True, right_index=True)
             combined = combined[combined["median_house_value"] != 500001] 
 
             # create our x and y again
             x = combined.drop(columns=["median_house_value"])
             y = pd.DataFrame(combined["median_house_value"])
-            print("in processor, y shape: ", y.shape)
-            print("in processor, x shape: ", x.shape)
+            #print("in processor, y shape: ", y.shape)
+            #print("in processor, x shape: ", x.shape)
 
-        # add one hot encoding to allow the model to work with text categories
-        one_hot_area = pd.get_dummies(x['ocean_proximity'], prefix="area")
-        
-        x = pd.merge(x, one_hot_area, left_index=True, right_index=True)
-        
+
         # We're going to fill the nan values with the average value of the column
         x = x.fillna(x.mean())
-        
-        # unnecessary column, we've one hot encoded it now
-        x = x.drop(['ocean_proximity'], axis=1)
 
         # getting the per-household values as these are more insightful
         x["total_rooms"] = x["total_rooms"] / x["households"]
@@ -132,21 +124,34 @@ class Regressor(nn.Module):
                 "total_bedrooms":"bedrooms_per_household", 
                 "population":"residents_per_household"}, inplace=True)
         
-        # logic to separate out training data from test data and scale by
-        # standardisation
+        # add one hot encoding to allow the model to work with text categories
+        one_hot_area = pd.get_dummies(x['ocean_proximity'], prefix="area")
+        x = x.drop(["ocean_proximity"], axis=1)
+
+        # Scale x
         if training:
             x = self.x_scaler.fit_transform(x)
         else:
             x = self.x_scaler.transform(x)
-        print("in processor after done, x shape: ", x.shape)
+        #print("in processor after done, x shape: ", x.shape)
+
+        # Scale y
         if y is not None and training:
             y = self.y_scaler.fit_transform(y)
-            print("in processor after done, y shape: ", y.shape)
+            #print("in processor after done, y shape: ", y.shape)
 
         elif y is not None:
             y = self.y_scaler.transform(y)
-            print("in processor after done, y shape: ", y.shape)
+            #print("in processor after done, y shape: ", y.shape)
 
+        x = pd.DataFrame(x)
+        one_hot_area.reset_index(inplace=True)
+        one_hot_area = one_hot_area.drop(["index"], axis=1)
+
+        x = pd.merge(x, one_hot_area, left_index=True, right_index=True)
+        #print("after merge: ", x.shape)
+        x = x.to_numpy()
+        #print("in processor after concatenation, x shape: ", x.shape)
         
         # Return preprocessed x and y
         return x, y
@@ -174,14 +179,14 @@ class Regressor(nn.Module):
         #######################################################################
 
         X, Y = self._preprocessor(x, y = y, training = True) # Do not forget
-        print("Type of X: ", type(X), ": and shape: ", X.shape)
-        print("Type of Y: ", type(Y), ": and shape: ", Y.shape)
+        # print("Type of X: ", type(X), ": and shape: ", X.shape)
+        #print("Type of Y: ", type(Y), ": and shape: ", Y.shape)
         # I think we should split our data into batches here
 
         '''X = torch.from_numpy(X).float()
         Y = torch.from_numpy(Y).float()'''
         
-        optimiser = torch.optim.SGD(self.model.parameters(), lr=0.01)
+        optimiser = torch.optim.Adam(self.model.parameters(), lr=0.0005)
         criterion = torch.nn.MSELoss()
 
         #shuffle seed
@@ -192,17 +197,20 @@ class Regressor(nn.Module):
             
             # shuffle split the dataset into specific number of batches
             X, Y = self.shuffle_data(X, Y, random_generator=rg)
+
             #print("Shape: ", X.shape, Y.shape, "Type: ", type(X))
-            X_batches = np.array_split(X, self.number_of_batches)
-            Y_batches = np.array_split(Y, self.number_of_batches)
-            #print("Shape: ", X_batches[0].shape, X_batches[1].shape, "Type: ", type(X_batches[0]))
+            number_of_batches = len(X) // self.size_of_batches
+            #print("Number of batches: ", number_of_batches)
+            X_batches = np.array_split(X, number_of_batches)
+            Y_batches = np.array_split(Y, number_of_batches)
+            # print("Shape: ", X_batches[0].shape, X_batches[1].shape, "Type: ", type(X_batches[0]))
 
             #convert to torch tensors
 
-            for batch_no in range(self.number_of_batches):
+            for batch_no in range(number_of_batches):
                 #convert to torch tensors
-                X_batches[batch_no] = torch.from_numpy(X).float()
-                Y_batches[batch_no] = torch.from_numpy(Y).float()
+                X_batches[batch_no] = torch.from_numpy(X_batches[batch_no]).float()
+                Y_batches[batch_no] = torch.from_numpy(Y_batches[batch_no]).float()
 
                 # forward pass
                 y_hat = self.model(X_batches[batch_no])
@@ -287,7 +295,7 @@ class Regressor(nn.Module):
         print("Y shape after processing in score: ", Y.shape)
         print("predictions shape: ", y_hat.shape)
 
-        return mean_squared_error(Y, y_hat)
+        return mean_squared_error(Y, y_hat) ** 0.5
         #return 0
 
         #return 0 # Replace this code with your own
@@ -370,8 +378,8 @@ def example_main():
 
     # Predictions - type shifting is so annoying, we're forcing y_predictions from np.array to pd.DataFrame here
     # most of this is just me fiddling to try to get something resembling a metric
-    y_predictions = pd.DataFrame(regressor.predict(x_test))
-    y_predictions = pd.merge(y_predictions, y_test, left_index=True, right_index=True)
+    y_predictions = pd.DataFrame(regressor.predict(x_train))
+    y_predictions = pd.merge(y_predictions, y_train, left_index=True, right_index=True)
     y_predictions.columns = ["predicted", "gold"]
     y_predictions["difference"] = (y_predictions["gold"] - y_predictions["predicted"]).apply(abs)
 
@@ -379,8 +387,11 @@ def example_main():
     print("mean error is:", mean_error)
     print(y_predictions[["gold", "predicted"]])
 
+    print("Gold standard deviation: ", y_predictions["gold"].std())
+    print("Prediction standard deviation: ", y_predictions["predicted"].std())
+
     # Error
-    error = regressor.score(x_test, y_test)
+    error = regressor.score(x_train, y_train)
     print("\nRegressor error: {}\n".format(error))
 
 
