@@ -7,6 +7,7 @@ import pandas as pd
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import GridSearchCV
 
 class Regressor(nn.Module):
 
@@ -37,6 +38,8 @@ class Regressor(nn.Module):
         self.output_size = 1
         self.number_of_epochs = nb_epoch
         self.number_of_batches = nb_batches
+        self.param_grid = {'epochs': [100, 150, 200, 250, 300, 350, 400, 450, 500, 550], 'learn_rate': [0.1, 0.01, 0.001, 0.0001], 'batches': [100, 200, 300, 400, 500, 600, 700, 800]}
+        
 
         # sample for the model that we want to create
         self.model = nn.Sequential(
