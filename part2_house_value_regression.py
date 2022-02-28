@@ -43,11 +43,11 @@ class Regressor(nn.Module):
 
         # sample for the model that we want to create
         self.model = nn.Sequential(
-            nn.Linear(self.input_size, 8),
+            nn.Linear(self.input_size, 64),
             nn.ReLU(),
-            nn.Linear(8, 5),
+            nn.Linear(64, 16),
             nn.ReLU(),
-            nn.Linear(5, self.output_size)
+            nn.Linear(16, self.output_size)
         )
 
         return
@@ -194,32 +194,31 @@ class Regressor(nn.Module):
         rg = default_rng(seed)
         X, Y = self.shuffle_data(X, Y, random_generator=rg)
 
+        # shuffle split the dataset into specific number of batches
+        #X, Y = self.shuffle_data(X, Y, random_generator=rg)
+
+        #print("Shape: ", X.shape, Y.shape, "Type: ", type(X))
+        number_of_batches = len(X) // self.size_of_batches
+        #print("Number of batches: ", number_of_batches)
+        X_batches = np.array_split(X, number_of_batches)
+        Y_batches = np.array_split(Y, number_of_batches)
+
+        #convert to torch tensors
+        for batch_no in range(number_of_batches):
+            X_batches[batch_no] = torch.from_numpy(X_batches[batch_no]).float()
+            Y_batches[batch_no] = torch.from_numpy(Y_batches[batch_no]).float()
+        # print("Shape: ", X_batches[0].shape, X_batches[1].shape, "Type: ", type(X_batches[0]))
+
         for epoch in range(self.number_of_epochs):
-            
-            # shuffle split the dataset into specific number of batches
-            #X, Y = self.shuffle_data(X, Y, random_generator=rg)
-
-            #print("Shape: ", X.shape, Y.shape, "Type: ", type(X))
-            number_of_batches = len(X) // self.size_of_batches
-            #print("Number of batches: ", number_of_batches)
-            X_batches = np.array_split(X, number_of_batches)
-            Y_batches = np.array_split(Y, number_of_batches)
-            # print("Shape: ", X_batches[0].shape, X_batches[1].shape, "Type: ", type(X_batches[0]))
-
-            #convert to torch tensors
-
             for batch_no in range(number_of_batches):
-                #convert to torch tensors
-                X_batches[batch_no] = torch.from_numpy(X_batches[batch_no]).float()
-                Y_batches[batch_no] = torch.from_numpy(Y_batches[batch_no]).float()
+                # Reset the gradients 
+                optimiser.zero_grad()
 
                 # forward pass
                 y_hat = self.model(X_batches[batch_no])
+                
                 # compute loss
-                loss = criterion(y_hat, Y_batches[batch_no]) 
-
-                # Reset the gradients 
-                optimiser.zero_grad() 
+                loss = criterion(y_hat, Y_batches[batch_no])  
 
                 # Backward pass (compute the gradients)
                 loss.backward()
@@ -237,7 +236,7 @@ class Regressor(nn.Module):
         #######################################################################
 
 
-    def predict(self, x, y=None):
+    def predict(self, x):
         """
         Output the value corresponding to an input x.
 
@@ -254,7 +253,7 @@ class Regressor(nn.Module):
         #                       ** START OF YOUR CODE **
         #######################################################################
         print("Predict function: entering processing:")
-        X, _ = self._preprocessor(x, y, training = False) # Do not forget
+        X, _ = self._preprocessor(x, training = False) # Do not forget
         print("X shape after preprocessing in predict: ", X.shape)
         X = torch.from_numpy(X).float()
 
@@ -289,16 +288,22 @@ class Regressor(nn.Module):
         #                       ** START OF YOUR CODE **
         #######################################################################
         print("Score function, entering processor:")
-        _, Y = self._preprocessor(x, y = y, training = False) # Do not forget
+        #_, Y = self._preprocessor(x, y = y, training = False) # Do not forget
         
         print("x shape before processing in score: ", x.shape)
         print("y shape before processing in score: ", y.shape)
-        y_hat = pd.DataFrame(self.predict(x, y))
+        y_hat = pd.DataFrame(self.predict(x))
         
-        print("Y shape after processing in score: ", Y.shape)
+        print("Y shape after processing in score: ", y.shape)
         print("predictions shape: ", y_hat.shape)
+        #print()
 
-        return mean_squared_error(Y, y_hat) ** 0.5
+        y_predictions = pd.merge(y_hat, y, left_index=True, right_index=True)
+        y_predictions.columns = ["predicted", "gold"]
+        y_predictions["difference"] = (y_predictions["gold"] - y_predictions["predicted"]).apply(abs)
+        print(y_predictions[["gold", "predicted"]])
+
+        return mean_squared_error(y, y_hat) ** 0.5
         #return 0
 
         #return 0 # Replace this code with your own
@@ -379,22 +384,8 @@ def example_main():
     save_regressor(regressor)
     # regressor = load_regressor()
 
-    # Predictions - type shifting is so annoying, we're forcing y_predictions from np.array to pd.DataFrame here
-    # most of this is just me fiddling to try to get something resembling a metric
-    y_predictions = pd.DataFrame(regressor.predict(x_train))
-    y_predictions = pd.merge(y_predictions, y_train, left_index=True, right_index=True)
-    y_predictions.columns = ["predicted", "gold"]
-    y_predictions["difference"] = (y_predictions["gold"] - y_predictions["predicted"]).apply(abs)
-
-    mean_error = y_predictions["difference"].mean()
-    print("mean error is:", mean_error)
-    print(y_predictions[["gold", "predicted"]])
-
-    print("Gold standard deviation: ", y_predictions["gold"].std())
-    print("Prediction standard deviation: ", y_predictions["predicted"].std())
-
     # Error
-    error = regressor.score(x_train, y_train)
+    error = regressor.score(x_test, y_test)
     print("\nRegressor error: {}\n".format(error))
 
 
