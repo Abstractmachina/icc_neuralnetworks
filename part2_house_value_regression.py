@@ -192,11 +192,12 @@ class Regressor(nn.Module):
         #shuffle seed
         seed = 60012
         rg = default_rng(seed)
+        X, Y = self.shuffle_data(X, Y, random_generator=rg)
 
         for epoch in range(self.number_of_epochs):
             
             # shuffle split the dataset into specific number of batches
-            X, Y = self.shuffle_data(X, Y, random_generator=rg)
+            #X, Y = self.shuffle_data(X, Y, random_generator=rg)
 
             #print("Shape: ", X.shape, Y.shape, "Type: ", type(X))
             number_of_batches = len(X) // self.size_of_batches
@@ -258,6 +259,8 @@ class Regressor(nn.Module):
         X = torch.from_numpy(X).float()
 
         normalised_y_predictions = self.model(X)
+
+        #print("normalised y predicts: ", normalised_y_predictions)
 
         #denormalise the predictions, to get something useful for comparisons
         y_predictions = self.y_scaler.inverse_transform(normalised_y_predictions.detach().numpy())
