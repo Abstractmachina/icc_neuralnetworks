@@ -252,14 +252,10 @@ class Regressor(nn.Module):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        print("Predict function: entering processing:")
         X, _ = self._preprocessor(x, training = False) # Do not forget
-        print("X shape after preprocessing in predict: ", X.shape)
         X = torch.from_numpy(X).float()
 
         normalised_y_predictions = self.model(X)
-
-        #print("normalised y predicts: ", normalised_y_predictions)
 
         #denormalise the predictions, to get something useful for comparisons
         y_predictions = self.y_scaler.inverse_transform(normalised_y_predictions.detach().numpy())
@@ -293,10 +289,7 @@ class Regressor(nn.Module):
         print("x shape before processing in score: ", x.shape)
         print("y shape before processing in score: ", y.shape)
         y_hat = pd.DataFrame(self.predict(x))
-        
-        print("Y shape after processing in score: ", y.shape)
-        print("predictions shape: ", y_hat.shape)
-        #print()
+    
 
         y_predictions = pd.merge(y_hat, y, left_index=True, right_index=True)
         y_predictions.columns = ["predicted", "gold"]
