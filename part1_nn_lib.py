@@ -1,9 +1,8 @@
-from chainer import grad
 import numpy as np
 import pickle
 
 
-def xavier_init(size, gain = 1.0):
+def xavier_init(size, gain=1.0):
     """
     Xavier initialization of network weights.
 
@@ -121,10 +120,10 @@ class SigmoidLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
+
         output_of_the_sigmoid_fce = 1.0 / (1.0 + np.exp(-x))
         # Used for backward(self, grad_z):
-        self._cache_current = output_of_the_sigmoid_fce 
+        self._cache_current = output_of_the_sigmoid_fce
         return output_of_the_sigmoid_fce
 
         #######################################################################
@@ -148,7 +147,7 @@ class SigmoidLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
+
         return self._cache_current * (1.0 - self._cache_current) * grad_z
 
         #######################################################################
@@ -186,10 +185,10 @@ class ReluLayer(Layer):
         # Reference: https://numpy.org/doc/stable/reference/generated/numpy.maximum.html
         # Compare all values in matrix x with value 0 and takes the maximum.
         # Intuitivelly, this max sure neither of the output values are negative.
-        # That is the behaviour of refu fce. 
-        output_of_the_relu_fce = np.maximum(0, x) 
+        # That is the behaviour of refu fce.
+        output_of_the_relu_fce = np.maximum(0, x)
         # USed for backward(self, grad_z):
-        self._cache_current = x 
+        self._cache_current = x
         return output_of_the_relu_fce
 
         #######################################################################
@@ -213,10 +212,10 @@ class ReluLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
-        filtering_only_negative = (self._cache_current <= 0)
+
+        filtering_only_negative = self._cache_current <= 0
         # Relu:
-        # We want to set all the negative values in grad_z to 0: 
+        # We want to set all the negative values in grad_z to 0:
         grad_z[filtering_only_negative] = 0
         return grad_z
 
@@ -247,10 +246,10 @@ class LinearLayer(Layer):
         self._W = None
         self._b = None
 
-        # Using Xavier function provided above, 
+        # Using Xavier function provided above,
         # initialises network weight randomly based on uniform distrobution:
-        self._W = xavier_init((n_in, n_out), 1.0) # Weights matrix
-        self._b = xavier_init((1, n_out), 1.0)    # Bias (error terms)
+        self._W = xavier_init((n_in, n_out), 1.0)  # Weights matrix
+        self._b = xavier_init((1, n_out), 1.0)  # Bias (error terms)
 
         self._cache_current = None
         self._grad_W_current = None
@@ -276,10 +275,10 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
-         # Wx + b; rewritten as xW + b to match dim of the matrices x and W:
+
+        # Wx + b; rewritten as xW + b to match dim of the matrices x and W:
         outputs_of_the_layer = x.dot(self._W) + self._b
-        self._cache_current = self._W, x # needed in backward(self, grad_z)
+        self._cache_current = self._W, x  # needed in backward(self, grad_z)
         return outputs_of_the_layer
 
         #######################################################################
@@ -306,7 +305,7 @@ class LinearLayer(Layer):
 
         w, a = self._cache_current
         self._grad_W_current = (a.transpose()).dot(grad_z)
-        self._grad_b_current = np.sum(grad_z, axis = 0)
+        self._grad_b_current = np.sum(grad_z, axis=0)
         return grad_z.dot(w.transpose())
 
         #######################################################################
@@ -324,7 +323,7 @@ class LinearLayer(Layer):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
+
         # Gradient descent (one step) to get a new value for weights matrix and bias:
         self._W -= learning_rate * self._grad_W_current
         self._b -= learning_rate * self._grad_b_current
@@ -360,30 +359,30 @@ class MultiLayerNetwork(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
+
         self._layers = None
         number_of_layers = len(neurons)
         layers_list = list()
 
         for i in range(number_of_layers):
-            # Linear Layers: 
+            # Linear Layers:
             if i == 0:
                 linear_layer = LinearLayer(input_dim, neurons[0])
             else:
-                linear_layer = LinearLayer(neurons[i-1], neurons[i])
+                linear_layer = LinearLayer(neurons[i - 1], neurons[i])
             # Activation functions:
             if activations[i] == "relu":
                 activation = ReluLayer()
             elif activations[i] == "sigmoid":
                 activation = SigmoidLayer()
             else:
-                # Mirroring input values to an identical output values 
+                # Mirroring input values to an identical output values
                 # (as if no activation fce was present):
-                activation = "identity" # taken from example_main()
+                activation = "identity"  # taken from example_main()
             layers_list.append((linear_layer, activation))
-        
+
         # Represents a list of tuples. Each tuple has two items: linear_layer and activation fce:
-        self._layers = layers_list # layer instances
+        self._layers = layers_list  # layer instances
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -405,7 +404,7 @@ class MultiLayerNetwork(object):
         #######################################################################
 
         # a_tuple represents: (linear_layer i, activation fce i)
-        for a_tuple in self._layers: 
+        for a_tuple in self._layers:
             x = a_tuple[0].forward(x)
             x = x if a_tuple[1] == "identity" else a_tuple[1].forward(x)
 
@@ -436,7 +435,7 @@ class MultiLayerNetwork(object):
 
         # a_tuple i represents: (linear_layer i, activation fce i)
         for a_tuple in reversed(self._layers):
-            grad_z = grad_z if a_tuple[1] == "identity" else a_tuple[1].backward(grad_z) 
+            grad_z = grad_z if a_tuple[1] == "identity" else a_tuple[1].backward(grad_z)
             grad_z = a_tuple[0].backward(grad_z)
 
         #######################################################################
@@ -487,13 +486,7 @@ class Trainer(object):
     """
 
     def __init__(
-        self,
-        network,
-        batch_size,
-        nb_epoch,
-        learning_rate,
-        loss_fun,
-        shuffle_flag,
+        self, network, batch_size, nb_epoch, learning_rate, loss_fun, shuffle_flag,
     ):
         """
         Constructor of the Trainer.
@@ -518,12 +511,12 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
+
         self._loss_layer = None
 
         if loss_fun == "mse":
-            self._loss_layer  = MSELossLayer()
-    
+            self._loss_layer = MSELossLayer()
+
         if loss_fun == "bce":
             self._loss_layer = CrossEntropyLossLayer()
 
@@ -589,16 +582,18 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
+
         for epoch_index in range(self.nb_epoch):
-            # By instruction; if shuffle_flag == True, 
+            # By instruction; if shuffle_flag == True,
             # shuffle the provided dataset using the shuffle method:
             if self.shuffle_flag == True:
-                input_dataset, target_dataset = self.shuffle(input_dataset, target_dataset)
-            # Split the provided dataset into minibatches of size batch_size 
+                input_dataset, target_dataset = self.shuffle(
+                    input_dataset, target_dataset
+                )
+            # Split the provided dataset into minibatches of size batch_size
             # and train the network using minibatch gradient descent:
             loss_list = list()
-            number_of_minibatches = (input_dataset.shape[0] // self.batch_size)
+            number_of_minibatches = input_dataset.shape[0] // self.batch_size
             for i in range(number_of_minibatches):
                 start = i * self.batch_size
                 end = (i + 1) * self.batch_size
@@ -618,7 +613,7 @@ class Trainer(object):
                 # respect to parameters of network:
                 grad_z = self._loss_layer.backward()
                 self.network.backward(grad_z)
-                # Performs one step of gradient descent on the network parameters: 
+                # Performs one step of gradient descent on the network parameters:
                 self.network.update_params(self.learning_rate)
             # Comment out for final submission:
             if epoch_index % 8 == 0:
@@ -645,15 +640,15 @@ class Trainer(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
-        y_output= self.network(input_dataset)
+
+        y_output = self.network(input_dataset)
 
         if self.loss_fun == "mse":
             loss = self._loss_layer.forward(y_output, target_dataset)
         if self.loss_fun == "bce":
             y_pred = CrossEntropyLossLayer.softmax(y_output)
             loss = self._loss_layer.forward(y_pred, target_dataset)
-        
+
         return loss
 
         #######################################################################
@@ -679,10 +674,10 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
+
         # Initialise variables for min-max scaling normalisation:
-        self.x_max = np.max(data, axis = 0)
-        self.x_min = np.min(data, axis = 0)
+        self.x_max = np.max(data, axis=0)
+        self.x_min = np.min(data, axis=0)
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -701,7 +696,7 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
+
         # MIN MAX Scaling:
         # x' = (x - min(x)) / (max(x) - min(x))
 
@@ -725,7 +720,7 @@ class Preprocessor(object):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        
+
         # MIN MAX Scaling:
         # x' = (x - min(x)) / (max(x) - min(x))
 
@@ -734,8 +729,8 @@ class Preprocessor(object):
         # x' * (max(x) - min(x)) + min(x) = x
         # x = x' * (max(x) - min(x)) + min(x)
 
-        reverted_data = data * (self.x_max - self.x_min) + self.x_min  
-        return reverted_data      
+        reverted_data = data * (self.x_max - self.x_min) + self.x_min
+        return reverted_data
 
         #######################################################################
         #                       ** END OF YOUR CODE **
