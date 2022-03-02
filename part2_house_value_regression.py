@@ -37,7 +37,7 @@ class Regressor(nn.Module):
         # X, _ = self._preprocessor(x, training=True)
         self.input_size = 12
         self.hidden_layer_2 = 64
-        self.hidden_layer_3 = 16
+        self.hidden_layer_3 = 12
         self.output_size = 1
         self.number_of_epochs = number_of_epochs
         self.size_of_batches = size_of_batches
@@ -69,8 +69,8 @@ class Regressor(nn.Module):
         )
 
 
-    def shuffle_data(self, x, y, random_generator=default_rng()):
-        shuffled_indices = random_generator.permutation(len(x))
+    def shuffle_data(self, x, y):
+        shuffled_indices = default_rng().permutation(len(x))
         x_shuffled = x[shuffled_indices]
         y_shuffled = y[shuffled_indices]
         return x_shuffled, y_shuffled
@@ -222,30 +222,26 @@ class Regressor(nn.Module):
         scheduler = ExponentialLR(optimiser, gamma=0.975)  # for lr decay
         criterion = torch.nn.MSELoss()
 
-        # shuffle seed
-        seed = 60012
-        rg = default_rng(seed)
-        X, Y = self.shuffle_data(X, Y, random_generator=rg)
-
-        # shuffle split the dataset into specific number of batches
-        # X, Y = self.shuffle_data(X, Y, random_generator=rg)
-
-        # print("Shape: ", X.shape, Y.shape, "Type: ", type(X))
         number_of_batches = 0
+        if len(X) <= self.size_of_batches:
+            number_of_batches = 1
+        else:
+            number_of_batches = len(X) // self.size_of_batches
+        print(number_of_batches)
+        # keep track of minimum loss
+        min_loss = float('inf')
+        early_stop_counter = 0
+        X, Y = self.shuffle_data(X, Y)
 
         for epoch in range(self.number_of_epochs):
-            X, Y = self.shuffle_data(X, Y, random_generator=rg)
-
-            if len(X) <= self.size_of_batches:
-                number_of_batches = 1
-            else:
-                number_of_batches = len(X) // self.size_of_batches
+            # shuffle split the dataset into specific number of batches
+            #X, Y = self.shuffle_data(X, Y)
             
             X_batches = np.array_split(X, number_of_batches)
             Y_batches = np.array_split(Y, number_of_batches)
 
             for batch_no in range(number_of_batches):
-
+                # print("Batch shape: ", X_batches[batch_no].shape)
                 X_batches[batch_no] = torch.from_numpy(X_batches[batch_no]).float()
                 Y_batches[batch_no] = torch.from_numpy(Y_batches[batch_no]).float()
                 
@@ -254,6 +250,14 @@ class Regressor(nn.Module):
 
                 # forward pass
                 y_hat = self.model(X_batches[batch_no])
+
+                y_hat_a = self.y_scaler.inverse_transform(y_hat.detach().numpy())
+                y_batch_a = self.y_scaler.inverse_transform(Y_batches[batch_no].detach().numpy())
+
+                y_hat_a = torch.from_numpy(y_hat_a).float()
+                y_batch_a = torch.from_numpy(y_batch_a).float()
+
+                rmse_loss = criterion(y_hat_a, y_batch_a)**0.5
 
                 # compute loss
                 loss = criterion(y_hat, Y_batches[batch_no])
@@ -267,8 +271,20 @@ class Regressor(nn.Module):
             scheduler.step()  # this is for the learning rate decay
 
             if epoch % 10 == 0:
-                print(f"L: {loss:.4f}")
-                #print(f"LR: {(scheduler.get_lr())}")
+                print(f"L: {loss:.4f}", ", ", rmse_loss)
+
+            
+            # save model every time it improves, and don't save models that haven't improved
+            if loss <= min_loss:
+                save_regressor(self)
+                min_loss = loss
+                early_stop_counter = 0
+            else:
+                early_stop_counter += 1
+            
+            # if you hit early stopping counter, end loop
+            if early_stop_counter == 100:
+                return self
 
         return self
 
@@ -353,7 +369,7 @@ def save_regressor(trained_model):
     # If you alter this, make sure it works in tandem with load_regressor
     with open("part2_model.pickle", "wb") as target:
         pickle.dump(trained_model, target)
-    print("\nSaved model in part2_model.pickle\n")
+    #print("\nSaved model in part2_model.pickle\n")
 
 
 def load_regressor():
@@ -425,7 +441,7 @@ def example_main():
     # fit the model based on our held out training set
     regressor.fit(x_train, y_train)
     # save it for later
-    save_regressor(regressor)
+    # save_regressor(regressor)
     # regressor = load_regressor()
 
     # Error
