@@ -12,7 +12,11 @@ from sklearn.model_selection import GridSearchCV
 
 
 class Regressor(nn.Module):
-    def __init__(self, x=None, number_of_epochs=200, size_of_batches=128, learn_rate=0.01):
+    def __init__(
+        self, x=None, number_of_epochs=1000, 
+        size_of_batches=128, learn_rate=0.2, 
+        hidden_layer_2=40, hidden_layer_3=20):
+
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """
@@ -36,8 +40,8 @@ class Regressor(nn.Module):
         self.y_scaler = StandardScaler()
         # X, _ = self._preprocessor(x, training=True)
         self.input_size = 12
-        self.hidden_layer_2 = 64
-        self.hidden_layer_3 = 12
+        self.hidden_layer_2 = hidden_layer_2
+        self.hidden_layer_3 = hidden_layer_3
         self.output_size = 1
         self.number_of_epochs = number_of_epochs
         self.size_of_batches = size_of_batches
@@ -46,6 +50,8 @@ class Regressor(nn.Module):
             "number_of_epochs": [200],
             "learn_rate": [0.1],
             "size_of_batches": [128],
+            "hidden_layer_2": [12],
+            "hidden_layer_3": [12]
         }
 
         # sample for the model that we want to create
@@ -68,31 +74,32 @@ class Regressor(nn.Module):
             nn.Linear(self.hidden_layer_3, self.output_size)
         )
 
-
     def shuffle_data(self, x, y):
         shuffled_indices = default_rng().permutation(len(x))
         x_shuffled = x[shuffled_indices]
         y_shuffled = y[shuffled_indices]
         return x_shuffled, y_shuffled
 
-    """def forward(self, x):
-        #x = self.flatten(x)
-        logits = self.linear_relu_stack(x)
-        return logits"""
-
     # get_params method implemented in estimator to make gridsearchCV function
     def get_params(self, deep=True):
         return {
             "number_of_epochs": self.number_of_epochs, 
             "learn_rate": self.learn_rate, 
-            "size_of_batches": self.size_of_batches
+            "size_of_batches": self.size_of_batches,
+            "hidden_layer_2": self.hidden_layer_2,
+            "hidden_layer_3": self.hidden_layer_3
         }
 
     #set params method for gridsearchCV function
-    def set_params(self, number_of_epochs, size_of_batches, learn_rate):
+    def set_params(self, number_of_epochs, size_of_batches,
+        learn_rate, hidden_layer_2, hidden_layer_3):
+
         self.number_of_epochs = number_of_epochs
         self.size_of_batches = size_of_batches
         self.learn_rate = learn_rate
+        self.hidden_layer_2 = hidden_layer_2
+        self.hidden_layer_3 = hidden_layer_3
+
         return self
 
 
@@ -118,20 +125,16 @@ class Regressor(nn.Module):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        # print("Just entering processor, x shape: ", x.shape)
 
         # This filters out certain columns in Score, but not in predict.
         if y is not None:
             # merge the two, drop the outlying house values
-            # print("Just entering processor, y shape: ", y.shape)
             combined = pd.merge(x, y, left_index=True, right_index=True)
             combined = combined[combined["median_house_value"] != 500001]
 
             # create our x and y again
             x = combined.drop(columns=["median_house_value"])
             y = pd.DataFrame(combined["median_house_value"])
-            # print("in processor, y shape: ", y.shape)
-            # print("in processor, x shape: ", x.shape)
 
         # We're going to fill the nan values with the average value of the column
         x = x.fillna(x.mean())
@@ -163,25 +166,20 @@ class Regressor(nn.Module):
             x = self.x_scaler.fit_transform(x)
         else:
             x = self.x_scaler.transform(x)
-        # print("in processor after done, x shape: ", x.shape)
 
         # Scale y
         if y is not None and training:
             y = self.y_scaler.fit_transform(y)
-            # print("in processor after done, y shape: ", y.shape)
 
         elif y is not None:
             y = self.y_scaler.transform(y)
-            # print("in processor after done, y shape: ", y.shape)
 
         x = pd.DataFrame(x)
         one_hot_area.reset_index(inplace=True)
         one_hot_area = one_hot_area.drop(["index"], axis=1)
 
         x = pd.merge(x, one_hot_area, left_index=True, right_index=True)
-        # print("after merge: ", x.shape)
         x = x.to_numpy()
-        # print("in processor after concatenation, x shape: ", x.shape)
 
         # Return preprocessed x and y
         return x, y
@@ -209,81 +207,84 @@ class Regressor(nn.Module):
         #######################################################################
 
         X, Y = self._preprocessor(x, y=y, training=True)  # Do not forget
-        # print("Type of X: ", type(X), ": and shape: ", X.shape)
-        # print("Type of Y: ", type(Y), ": and shape: ", Y.shape)
-        # I think we should split our data into batches here
-
         # set input size of neural network
         self.input_size = X.shape[1]
         self.instantiate_model()
 
+        # separate out a validation set to use for checking loss at each epoch.
+        x_train, x_val, y_train, y_val = train_test_split(
+            X, Y, test_size=0.25, random_state=42
+        )
 
+        # choose model optimiser, lr decay function, and loss function
         optimiser = torch.optim.Adam(self.model.parameters(), lr=self.learn_rate)
         scheduler = ExponentialLR(optimiser, gamma=0.975)  # for lr decay
         criterion = torch.nn.MSELoss()
 
-        number_of_batches = 0
-        if len(X) <= self.size_of_batches:
+        #calculate the number of batches required based on desired batch size
+        if len(x_train) <= self.size_of_batches:
             number_of_batches = 1
         else:
-            number_of_batches = len(X) // self.size_of_batches
-        print(number_of_batches)
-        # keep track of minimum loss
+            number_of_batches = len(x_train) // self.size_of_batches
+
+        # keep track of minimum loss and stop if exceeds a certain 
+        # number of epochs without reducing loss
         min_loss = float('inf')
         early_stop_counter = 0
-        X, Y = self.shuffle_data(X, Y)
 
         for epoch in range(self.number_of_epochs):
             # shuffle split the dataset into specific number of batches
-            #X, Y = self.shuffle_data(X, Y)
+            X, Y = self.shuffle_data(X, Y)
             
+            # create batches to be iterated through
             X_batches = np.array_split(X, number_of_batches)
             Y_batches = np.array_split(Y, number_of_batches)
 
             for batch_no in range(number_of_batches):
-                # print("Batch shape: ", X_batches[batch_no].shape)
                 X_batches[batch_no] = torch.from_numpy(X_batches[batch_no]).float()
                 Y_batches[batch_no] = torch.from_numpy(Y_batches[batch_no]).float()
                 
                 # Reset the gradients
                 optimiser.zero_grad()
-
                 # forward pass
                 y_hat = self.model(X_batches[batch_no])
-
-                y_hat_a = self.y_scaler.inverse_transform(y_hat.detach().numpy())
-                y_batch_a = self.y_scaler.inverse_transform(Y_batches[batch_no].detach().numpy())
-
-                y_hat_a = torch.from_numpy(y_hat_a).float()
-                y_batch_a = torch.from_numpy(y_batch_a).float()
-
-                rmse_loss = criterion(y_hat_a, y_batch_a)**0.5
-
                 # compute loss
                 loss = criterion(y_hat, Y_batches[batch_no])
-
                 # Backward pass (compute the gradients)
                 loss.backward()
-
                 # update parameters
                 optimiser.step()
 
             scheduler.step()  # this is for the learning rate decay
 
-            if epoch % 10 == 0:
-                print(f"L: {loss:.4f}", ", ", rmse_loss)
+            x_val_tensor = torch.from_numpy(x_val).float()
+            y_val_tensor = torch.from_numpy(y_val).float()
 
-            
+            y_predictions = self.model(x_val_tensor)
+
+            y_predictions_a = self.y_scaler.inverse_transform(y_predictions.detach().numpy())
+            y_gold_a = self.y_scaler.inverse_transform(y_val_tensor.detach().numpy())
+
+            y_predictions_a = torch.from_numpy(y_predictions_a).float()
+            y_gold_a = torch.from_numpy(y_gold_a).float()
+
+            epoch_loss = criterion(y_predictions, y_val_tensor)
+            epoch_rmse_loss = criterion(y_predictions_a, y_gold_a)**0.5
+
+            if epoch % 10 == 0:
+                print("Epoch ", epoch, f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
+
             # save model every time it improves, and don't save models that haven't improved
-            if loss <= min_loss:
+            if epoch_loss < min_loss:
                 save_regressor(self)
-                min_loss = loss
+                min_loss = epoch_loss
                 early_stop_counter = 0
             else:
                 early_stop_counter += 1
             
             # if you hit early stopping counter, end loop
             if early_stop_counter == 100:
+                print("I'm done boi, counter is at: ", early_stop_counter)
                 return self
 
         return self
@@ -341,11 +342,8 @@ class Regressor(nn.Module):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-        print("Score function, entering processor:")
         # _, Y = self._preprocessor(x, y = y, training = False) # Do not forget
 
-        print("x shape before processing in score: ", x.shape)
-        print("y shape before processing in score: ", y.shape)
         y_hat = pd.DataFrame(self.predict(x))
 
         y_predictions = pd.merge(y_hat, y, left_index=True, right_index=True)
@@ -436,7 +434,7 @@ def example_main():
         x, y, test_size=0.3, random_state=42
     )
     # Create the regressor model
-    regressor = Regressor(x_train, number_of_epochs=200)
+    regressor = Regressor(x_train)
 
     # fit the model based on our held out training set
     regressor.fit(x_train, y_train)
