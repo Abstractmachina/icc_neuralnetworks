@@ -12,7 +12,7 @@ from sklearn.model_selection import GridSearchCV
 
 
 class Regressor(nn.Module):
-    def __init__(self, x=None, number_of_epochs=400, size_of_batches=128, learn_rate=0.01):
+    def __init__(self, x=None, number_of_epochs=200, size_of_batches=128, learn_rate=0.01):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """
@@ -43,9 +43,9 @@ class Regressor(nn.Module):
         self.size_of_batches = size_of_batches
         self.learn_rate = learn_rate
         self.param_grid = {
-            "number_of_epochs": [200, 250, 300],
-            "learn_rate": [0.1, 0.01, 0.001],
-            "size_of_batches": [64, 128, 256],
+            "number_of_epochs": [200],
+            "learn_rate": [0.1],
+            "size_of_batches": [128],
         }
 
         # sample for the model that we want to create
@@ -93,6 +93,7 @@ class Regressor(nn.Module):
         self.number_of_epochs = number_of_epochs
         self.size_of_batches = size_of_batches
         self.learn_rate = learn_rate
+        return self
 
 
     def _preprocessor(self, x, y=None, training=False):
@@ -231,22 +232,23 @@ class Regressor(nn.Module):
 
         # print("Shape: ", X.shape, Y.shape, "Type: ", type(X))
         number_of_batches = 0
-        if len(X) <= self.size_of_batches:
-            number_of_batches = 1
-        else:
-            number_of_batches = len(X) // self.size_of_batches
-        # print("Number of batches: ", number_of_batches)
-        X_batches = np.array_split(X, number_of_batches)
-        Y_batches = np.array_split(Y, number_of_batches)
-
-        # convert to torch tensors
-        for batch_no in range(number_of_batches):
-            X_batches[batch_no] = torch.from_numpy(X_batches[batch_no]).float()
-            Y_batches[batch_no] = torch.from_numpy(Y_batches[batch_no]).float()
-        # print("Shape: ", X_batches[0].shape, X_batches[1].shape, "Type: ", type(X_batches[0]))
 
         for epoch in range(self.number_of_epochs):
+            X, Y = self.shuffle_data(X, Y, random_generator=rg)
+
+            if len(X) <= self.size_of_batches:
+                number_of_batches = 1
+            else:
+                number_of_batches = len(X) // self.size_of_batches
+            
+            X_batches = np.array_split(X, number_of_batches)
+            Y_batches = np.array_split(Y, number_of_batches)
+
             for batch_no in range(number_of_batches):
+
+                X_batches[batch_no] = torch.from_numpy(X_batches[batch_no]).float()
+                Y_batches[batch_no] = torch.from_numpy(Y_batches[batch_no]).float()
+                
                 # Reset the gradients
                 optimiser.zero_grad()
 
@@ -430,7 +432,7 @@ def example_main():
     error = regressor.score(x_test, y_test)
     print("\nRegressor error: {}\n".format(error))
 
-    RegressorHyperParameterSearch(x_train, y_train)
+    #RegressorHyperParameterSearch(x_train, y_train)
 
 
 if __name__ == "__main__":
