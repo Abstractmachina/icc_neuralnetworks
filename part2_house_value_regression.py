@@ -12,7 +12,7 @@ from sklearn.model_selection import GridSearchCV
 
 
 class Regressor(nn.Module):
-    def __init__(self, x, nb_epoch=200, size_of_batch=400):
+    def __init__(self, x=None, number_of_epochs=400, size_of_batches=128, learn_rate=0.01):
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
         """
@@ -34,27 +34,22 @@ class Regressor(nn.Module):
 
         self.x_scaler = StandardScaler()
         self.y_scaler = StandardScaler()
-        X, _ = self._preprocessor(x, training=True)
-        self.input_size = X.shape[1]
+        # X, _ = self._preprocessor(x, training=True)
+        self.input_size = 12
+        self.hidden_layer_2 = 64
+        self.hidden_layer_3 = 16
         self.output_size = 1
-        self.number_of_epochs = nb_epoch
-        self.size_of_batches = size_of_batch
+        self.number_of_epochs = number_of_epochs
+        self.size_of_batches = size_of_batches
+        self.learn_rate = learn_rate
         self.param_grid = {
-            "epochs": [100, 150, 200, 250, 300, 350, 400, 450, 500, 550],
-            "learn_rate": [0.1, 0.01, 0.001, 0.0001],
-            "batches": [100, 200, 300, 400, 500, 600, 700, 800],
+            "number_of_epochs": [200, 250, 300],
+            "learn_rate": [0.1, 0.01, 0.001],
+            "size_of_batches": [64, 128, 256],
         }
 
         # sample for the model that we want to create
-        self.model = nn.Sequential(
-            nn.Linear(self.input_size, 64),
-            nn.Dropout(p=0),  # i.e. dropout currently doing nothing.
-            nn.ReLU(),
-            nn.Linear(64, 16),
-            nn.Dropout(p=0),  # also doing nothing here
-            nn.ReLU(),
-            nn.Linear(16, self.output_size),
-        )
+        self.model = None
 
         return
 
@@ -62,8 +57,17 @@ class Regressor(nn.Module):
         #                       ** END OF YOUR CODE **
         #######################################################################
 
-    # def get_params(self,):
-    # return dictionary of hyperparameters you want to pass
+    def instantiate_model(self):
+        self.model = nn.Sequential(
+            nn.Linear(self.input_size, self.hidden_layer_2),
+            nn.Dropout(p=0),  # i.e. dropout currently doing nothing.
+            nn.ReLU(),
+            nn.Linear(self.hidden_layer_2, self.hidden_layer_3),
+            nn.Dropout(p=0),  # also doing nothing here
+            nn.ReLU(),
+            nn.Linear(self.hidden_layer_3, self.output_size)
+        )
+
 
     def shuffle_data(self, x, y, random_generator=default_rng()):
         shuffled_indices = random_generator.permutation(len(x))
@@ -75,6 +79,21 @@ class Regressor(nn.Module):
         #x = self.flatten(x)
         logits = self.linear_relu_stack(x)
         return logits"""
+
+    # get_params method implemented in estimator to make gridsearchCV function
+    def get_params(self, deep=True):
+        return {
+            "number_of_epochs": self.number_of_epochs, 
+            "learn_rate": self.learn_rate, 
+            "size_of_batches": self.size_of_batches
+        }
+
+    #set params method for gridsearchCV function
+    def set_params(self, number_of_epochs, size_of_batches, learn_rate):
+        self.number_of_epochs = number_of_epochs
+        self.size_of_batches = size_of_batches
+        self.learn_rate = learn_rate
+
 
     def _preprocessor(self, x, y=None, training=False):
         """
@@ -193,10 +212,12 @@ class Regressor(nn.Module):
         # print("Type of Y: ", type(Y), ": and shape: ", Y.shape)
         # I think we should split our data into batches here
 
-        """X = torch.from_numpy(X).float()
-        Y = torch.from_numpy(Y).float()"""
+        # set input size of neural network
+        self.input_size = X.shape[1]
+        self.instantiate_model()
 
-        optimiser = torch.optim.Adam(self.model.parameters(), lr=0.1)
+
+        optimiser = torch.optim.Adam(self.model.parameters(), lr=self.learn_rate)
         scheduler = ExponentialLR(optimiser, gamma=0.975)  # for lr decay
         criterion = torch.nn.MSELoss()
 
@@ -209,7 +230,11 @@ class Regressor(nn.Module):
         # X, Y = self.shuffle_data(X, Y, random_generator=rg)
 
         # print("Shape: ", X.shape, Y.shape, "Type: ", type(X))
-        number_of_batches = len(X) // self.size_of_batches
+        number_of_batches = 0
+        if len(X) <= self.size_of_batches:
+            number_of_batches = 1
+        else:
+            number_of_batches = len(X) // self.size_of_batches
         # print("Number of batches: ", number_of_batches)
         X_batches = np.array_split(X, number_of_batches)
         Y_batches = np.array_split(Y, number_of_batches)
@@ -241,7 +266,7 @@ class Regressor(nn.Module):
 
             if epoch % 10 == 0:
                 print(f"L: {loss:.4f}")
-                print(f"LR: {(scheduler.get_lr())}")
+                #print(f"LR: {(scheduler.get_lr())}")
 
         return self
 
@@ -362,8 +387,10 @@ def RegressorHyperParameterSearch(x_train, y_train):
     # tutorial page, here: https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html.
     regressor = Regressor(x_train)
 
-    hyperparameter_tuner = GridSearchCV(regressor, regressor.param_grid)
+    hyperparameter_tuner = GridSearchCV(regressor, regressor.param_grid, cv=5)
     hyperparameter_tuner.fit(x_train, y_train)
+    print(type(hyperparameter_tuner))
+    #hyperparameter_tuner.fit(x_train, y_train)
 
     print(sorted(hyperparameter_tuner.cv_results_))
 
@@ -391,7 +418,7 @@ def example_main():
         x, y, test_size=0.3, random_state=42
     )
     # Create the regressor model
-    regressor = Regressor(x_train, nb_epoch=200)
+    regressor = Regressor(x_train, number_of_epochs=200)
 
     # fit the model based on our held out training set
     regressor.fit(x_train, y_train)
