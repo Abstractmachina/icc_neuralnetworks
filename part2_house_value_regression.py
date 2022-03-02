@@ -36,8 +36,8 @@ class Regressor(nn.Module):
         self.y_scaler = StandardScaler()
         # X, _ = self._preprocessor(x, training=True)
         self.input_size = 12
-        self.hidden_layer_2 = 64
-        self.hidden_layer_3 = 16
+        self.hidden_layer_2 = 32
+        self.hidden_layer_3 = 8
         self.output_size = 1
         self.number_of_epochs = number_of_epochs
         self.size_of_batches = size_of_batches
@@ -74,11 +74,6 @@ class Regressor(nn.Module):
         x_shuffled = x[shuffled_indices]
         y_shuffled = y[shuffled_indices]
         return x_shuffled, y_shuffled
-
-    """def forward(self, x):
-        #x = self.flatten(x)
-        logits = self.linear_relu_stack(x)
-        return logits"""
 
     # get_params method implemented in estimator to make gridsearchCV function
     def get_params(self, deep=True):
@@ -217,15 +212,13 @@ class Regressor(nn.Module):
         self.input_size = X.shape[1]
         self.instantiate_model()
 
-
         optimiser = torch.optim.Adam(self.model.parameters(), lr=self.learn_rate)
-        scheduler = ExponentialLR(optimiser, gamma=0.975)  # for lr decay
+        scheduler = ExponentialLR(optimiser, gamma=0.9)  # for lr decay
         criterion = torch.nn.MSELoss()
 
         # shuffle seed
         seed = 60012
         rg = default_rng(seed)
-        X, Y = self.shuffle_data(X, Y, random_generator=rg)
 
         # shuffle split the dataset into specific number of batches
         # X, Y = self.shuffle_data(X, Y, random_generator=rg)
@@ -268,7 +261,7 @@ class Regressor(nn.Module):
 
             if epoch % 10 == 0:
                 print(f"L: {loss:.4f}")
-                #print(f"LR: {(scheduler.get_lr())}")
+                print(f"LR: {(scheduler.get_lr())}")
 
         return self
 
@@ -419,11 +412,13 @@ def example_main():
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=0.3, random_state=42
     )
+    print(x.shape)
     # Create the regressor model
     regressor = Regressor(x_train, number_of_epochs=200)
-
+    print(x_train.shape)
     # fit the model based on our held out training set
     regressor.fit(x_train, y_train)
+    print(x_train.shape)
     # save it for later
     save_regressor(regressor)
     # regressor = load_regressor()
