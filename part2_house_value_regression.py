@@ -1,3 +1,5 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import torch
 from torch import dropout, nn
 from torch.optim.lr_scheduler import ExponentialLR
@@ -15,7 +17,7 @@ class Regressor(nn.Module):
     def __init__(
         self,
         x=None,
-        number_of_epochs=400,
+        nb_epochs=500,
         size_of_batches=128,
         hidden_layer_2=64,
         hidden_layer_3=25,
@@ -51,7 +53,7 @@ class Regressor(nn.Module):
         self.dropout_layer_1 = dropout_layer_1
         self.dropout_layer_2 = dropout_layer_2
         self.output_size = 1
-        self.number_of_epochs = number_of_epochs
+        self.nb_epochs = nb_epochs
         self.size_of_batches = size_of_batches
         # self.param_grid = {
         #     "number_of_epochs": [x for x in range(200, 1100, 100)],
@@ -99,7 +101,7 @@ class Regressor(nn.Module):
     # get_params method implemented in estimator to make gridsearchCV function
     def get_params(self, deep=True):
         return {
-            "number_of_epochs": self.number_of_epochs,
+            "nb_epochs": self.number_of_epochs,
             "size_of_batches": self.size_of_batches,
             "hidden_layer_2": self.hidden_layer_2,
             "hidden_layer_3": self.hidden_layer_3,
@@ -110,7 +112,7 @@ class Regressor(nn.Module):
     # set params method for gridsearchCV function
     def set_params(
         self,
-        number_of_epochs,
+        nb_epochs,
         size_of_batches,
         hidden_layer_2,
         hidden_layer_3,
@@ -118,7 +120,7 @@ class Regressor(nn.Module):
         dropout_layer_2,
     ):
 
-        self.number_of_epochs = number_of_epochs
+        self.nb_epochs = nb_epochs
         self.size_of_batches = size_of_batches
         self.hidden_layer_2 = hidden_layer_2
         self.hidden_layer_3 = hidden_layer_3
@@ -250,13 +252,14 @@ class Regressor(nn.Module):
             number_of_batches = 1
         else:
             number_of_batches = len(x_train) // self.size_of_batches
+        #print("number of batches: ", number_of_batches)
 
         # keep track of minimum loss and stop if exceeds a certain
         # number of epochs without reducing loss
         min_loss = float("inf")
         early_stop_counter = 0
 
-        for epoch in range(self.number_of_epochs):
+        for epoch in range(self.nb_epochs):
             # shuffle split the dataset into specific number of batches
             X, Y = self.shuffle_data(X, Y)
 
@@ -297,8 +300,8 @@ class Regressor(nn.Module):
             epoch_loss = criterion(y_predictions, y_val_tensor)
             epoch_rmse_loss = criterion(y_predictions_a, y_gold_a) ** 0.5
 
-            # if epoch % 10 == 0:
-            # print("Epoch ", epoch, f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
+            '''if epoch % 100 == 0:
+                print("Epoch ", epoch, f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)'''
 
             # save model every time it improves, and don't save models that haven't improved
             if epoch_loss < min_loss:
@@ -308,7 +311,7 @@ class Regressor(nn.Module):
                 early_stop_counter += 1
 
             # if you hit early stopping counter, end loop
-            if early_stop_counter == 50:
+            if early_stop_counter == 5000:
                 print("Finished tuning. Results: ")
                 print(
                     "With params set to: Epochs: ",
@@ -399,8 +402,7 @@ class Regressor(nn.Module):
         y_predictions["difference"] = (
             y_predictions["gold"] - y_predictions["predicted"]
         ).apply(abs)
-        print(y_predictions[["gold", "predicted"]])
-
+        #print(y_predictions[["gold", "predicted"]])
         return mean_squared_error(y, y_hat) ** 0.5
 
         #######################################################################
@@ -451,7 +453,7 @@ def RegressorHyperParameterSearch(x_train, y_train):
     # tutorial page, here: https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html.
     regressor = Regressor(x_train)
 
-    hyperparameter_tuner = GridSearchCV(regressor, regressor.param_grid, cv=5)
+    hyperparameter_tuner = GridSearchCV(regressor, regressor.param_grid, cv=2)
     hyperparameter_tuner.fit(x_train, y_train)
     print(type(hyperparameter_tuner))
     # hyperparameter_tuner.fit(x_train, y_train)
@@ -481,7 +483,9 @@ def example_main():
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=0.3, random_state=42
     )
-    print(x.shape)
+
+    print("Different ocean proximities train: ", x_train["ocean_proximity"].nunique())
+    print("Different ocean proximities test: ", x_test["ocean_proximity"].nunique())
     # Create the regressor model
     regressor = Regressor(x_train)
 
