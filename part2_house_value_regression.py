@@ -1,11 +1,13 @@
+import warnings
+warnings.simplefilter(action='ignore', category=FutureWarning)
 import torch
-from torch import nn
+from torch import dropout, nn
 from torch.optim.lr_scheduler import ExponentialLR
 import pickle
 import numpy as np
 from numpy.random import default_rng
 import pandas as pd
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
@@ -13,9 +15,13 @@ from sklearn.model_selection import GridSearchCV
 
 class Regressor(nn.Module):
     def __init__(
-        self, x=None, number_of_epochs=1000, 
-        size_of_batches=128, learn_rate=0.2, 
-        hidden_layer_2=40, hidden_layer_3=20):
+        self,
+        x=None,
+        nb_epoch=500,
+        size_of_batches=128,
+        hidden_layer_2=64,
+        hidden_layer_3=25,
+    ):
 
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
@@ -43,15 +49,13 @@ class Regressor(nn.Module):
         self.hidden_layer_2 = hidden_layer_2
         self.hidden_layer_3 = hidden_layer_3
         self.output_size = 1
-        self.number_of_epochs = number_of_epochs
+        self.nb_epoch = nb_epoch
         self.size_of_batches = size_of_batches
-        self.learn_rate = learn_rate
         self.param_grid = {
-            "number_of_epochs": [200],
-            "learn_rate": [0.1],
-            "size_of_batches": [128],
-            "hidden_layer_2": [12],
-            "hidden_layer_3": [12]
+            "nb_epoch": [500, 750, 1000],
+            "size_of_batches": [32, 64, 128],
+            "hidden_layer_2": [32, 64],
+            "hidden_layer_3": [16, 25],
         }
 
         # sample for the model that we want to create
@@ -66,12 +70,10 @@ class Regressor(nn.Module):
     def instantiate_model(self):
         self.model = nn.Sequential(
             nn.Linear(self.input_size, self.hidden_layer_2),
-            nn.Dropout(p=0),  # i.e. dropout currently doing nothing.
             nn.ReLU(),
             nn.Linear(self.hidden_layer_2, self.hidden_layer_3),
-            nn.Dropout(p=0),  # also doing nothing here
             nn.ReLU(),
-            nn.Linear(self.hidden_layer_3, self.output_size)
+            nn.Linear(self.hidden_layer_3, self.output_size),
         )
 
     def shuffle_data(self, x, y):
@@ -83,25 +85,27 @@ class Regressor(nn.Module):
     # get_params method implemented in estimator to make gridsearchCV function
     def get_params(self, deep=True):
         return {
-            "number_of_epochs": self.number_of_epochs, 
-            "learn_rate": self.learn_rate, 
+            "nb_epoch": self.nb_epoch,
             "size_of_batches": self.size_of_batches,
             "hidden_layer_2": self.hidden_layer_2,
             "hidden_layer_3": self.hidden_layer_3
         }
 
-    #set params method for gridsearchCV function
-    def set_params(self, number_of_epochs, size_of_batches,
-        learn_rate, hidden_layer_2, hidden_layer_3):
+    # set params method for gridsearchCV function
+    def set_params(
+        self,
+        nb_epoch,
+        size_of_batches,
+        hidden_layer_2,
+        hidden_layer_3
+    ):
 
-        self.number_of_epochs = number_of_epochs
+        self.nb_epoch = nb_epoch
         self.size_of_batches = size_of_batches
-        self.learn_rate = learn_rate
         self.hidden_layer_2 = hidden_layer_2
         self.hidden_layer_3 = hidden_layer_3
 
         return self
-
 
     def _preprocessor(self, x, y=None, training=False):
         """
@@ -158,7 +162,15 @@ class Regressor(nn.Module):
         )
 
         # add one hot encoding to allow the model to work with text categories
+        # First create a list of strings containing all possible values in the ocean_proximity column
+        # this is so that if a dataset doesn't contain some of the values by chance, the 
+        # processed matrix still contains the right number of columns
+
+        op_categories = ['area_<1H OCEAN', 'area_INLAND', 'area_ISLAND', 'area_NEAR BAY', 'area_NEAR OCEAN']
+
         one_hot_area = pd.get_dummies(x["ocean_proximity"], prefix="area")
+        one_hot_area = one_hot_area.reindex(columns=op_categories, fill_value=0)
+
         x = x.drop(["ocean_proximity"], axis=1)
 
         # Scale x
@@ -217,25 +229,26 @@ class Regressor(nn.Module):
         )
 
         # choose model optimiser, lr decay function, and loss function
-        optimiser = torch.optim.Adam(self.model.parameters(), lr=self.learn_rate)
-        scheduler = ExponentialLR(optimiser, gamma=0.975)  # for lr decay
+        optimiser = torch.optim.Adam(self.model.parameters())
+        # scheduler = ExponentialLR(optimiser, gamma=0.9)  # for lr decay, now deprecated
         criterion = torch.nn.MSELoss()
 
-        #calculate the number of batches required based on desired batch size
+        # calculate the number of batches required based on desired batch size
         if len(x_train) <= self.size_of_batches:
             number_of_batches = 1
         else:
             number_of_batches = len(x_train) // self.size_of_batches
+        #print("number of batches: ", number_of_batches)
 
-        # keep track of minimum loss and stop if exceeds a certain 
+        # keep track of minimum loss and stop if exceeds a certain
         # number of epochs without reducing loss
-        min_loss = float('inf')
+        min_loss = float("inf")
         early_stop_counter = 0
 
-        for epoch in range(self.number_of_epochs):
+        for epoch in range(self.nb_epoch):
             # shuffle split the dataset into specific number of batches
             X, Y = self.shuffle_data(X, Y)
-            
+
             # create batches to be iterated through
             X_batches = np.array_split(X, number_of_batches)
             Y_batches = np.array_split(Y, number_of_batches)
@@ -243,7 +256,7 @@ class Regressor(nn.Module):
             for batch_no in range(number_of_batches):
                 X_batches[batch_no] = torch.from_numpy(X_batches[batch_no]).float()
                 Y_batches[batch_no] = torch.from_numpy(Y_batches[batch_no]).float()
-                
+
                 # Reset the gradients
                 optimiser.zero_grad()
                 # forward pass
@@ -255,37 +268,63 @@ class Regressor(nn.Module):
                 # update parameters
                 optimiser.step()
 
-            scheduler.step()  # this is for the learning rate decay
+            # scheduler.step()  # this was for the learning rate decay, now deprecated
 
             x_val_tensor = torch.from_numpy(x_val).float()
             y_val_tensor = torch.from_numpy(y_val).float()
 
             y_predictions = self.model(x_val_tensor)
 
-            y_predictions_a = self.y_scaler.inverse_transform(y_predictions.detach().numpy())
+            y_predictions_a = self.y_scaler.inverse_transform(
+                y_predictions.detach().numpy()
+            )
             y_gold_a = self.y_scaler.inverse_transform(y_val_tensor.detach().numpy())
 
             y_predictions_a = torch.from_numpy(y_predictions_a).float()
             y_gold_a = torch.from_numpy(y_gold_a).float()
 
             epoch_loss = criterion(y_predictions, y_val_tensor)
-            epoch_rmse_loss = criterion(y_predictions_a, y_gold_a)**0.5
+            epoch_rmse_loss = criterion(y_predictions_a, y_gold_a) ** 0.5
 
-            if epoch % 10 == 0:
-                print("Epoch ", epoch, f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
+            '''if epoch % 100 == 0:
+                print("Epoch ", epoch, f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)'''
 
             # save model every time it improves, and don't save models that haven't improved
             if epoch_loss < min_loss:
-                save_regressor(self)
                 min_loss = epoch_loss
                 early_stop_counter = 0
             else:
                 early_stop_counter += 1
-            
+
             # if you hit early stopping counter, end loop
-            if early_stop_counter == 100:
-                print("I'm done boi, counter is at: ", early_stop_counter)
+            if early_stop_counter == 150:
+                '''print("Finished tuning. Results: ")
+                print(
+                    "   With params set to: Epochs: ",
+                    self.nb_epoch,
+                    ", Batch Size: ",
+                    self.size_of_batches,
+                    ", and others: ",
+                    self.hidden_layer_2,
+                    self.hidden_layer_3,
+                )
+                print(f"   Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss, "\n")'''
+                print("Number of epochs: ", epoch)
                 return self
+
+            #if epoch == self.nb_epoch - 1:
+                '''print("Finished tuning. Results: ")
+                print(
+                    "   With params set to: Epochs: ",
+                    self.nb_epoch,
+                    ", Batch Size: ",
+                    self.size_of_batches,
+                    ", and others: ",
+                    self.hidden_layer_2,
+                    self.hidden_layer_3,
+                )
+                print(f"   Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss, "\n")'''
+
 
         return self
 
@@ -351,8 +390,18 @@ class Regressor(nn.Module):
         y_predictions["difference"] = (
             y_predictions["gold"] - y_predictions["predicted"]
         ).apply(abs)
-        print(y_predictions[["gold", "predicted"]])
-
+        #print(y_predictions[["gold", "predicted"]])
+        print("Finished tuning. Results: ")
+        print(
+            "   With params set to: Epochs: ",
+            self.nb_epoch,
+            ", Batch Size: ",
+            self.size_of_batches,
+            ", and others: ",
+            self.hidden_layer_2,
+            self.hidden_layer_3,
+        )
+        print("       Score on test set: ", mean_squared_error(y, y_hat) ** 0.5)
         return mean_squared_error(y, y_hat) ** 0.5
 
         #######################################################################
@@ -367,7 +416,7 @@ def save_regressor(trained_model):
     # If you alter this, make sure it works in tandem with load_regressor
     with open("part2_model.pickle", "wb") as target:
         pickle.dump(trained_model, target)
-    #print("\nSaved model in part2_model.pickle\n")
+    # print("\nSaved model in part2_model.pickle\n")
 
 
 def load_regressor():
@@ -399,14 +448,14 @@ def RegressorHyperParameterSearch(x_train, y_train):
     #                       ** START OF YOUR CODE **
     #######################################################################
 
-    # This is the basic format of the gridsearchcv that I found on their 
+    # This is the basic format of the gridsearchcv that I found on their
     # tutorial page, here: https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html.
     regressor = Regressor(x_train)
 
-    hyperparameter_tuner = GridSearchCV(regressor, regressor.param_grid, cv=5)
+    hyperparameter_tuner = GridSearchCV(regressor, regressor.param_grid, cv=2)
     hyperparameter_tuner.fit(x_train, y_train)
     print(type(hyperparameter_tuner))
-    #hyperparameter_tuner.fit(x_train, y_train)
+    # hyperparameter_tuner.fit(x_train, y_train)
 
     print(sorted(hyperparameter_tuner.cv_results_))
 
@@ -433,11 +482,15 @@ def example_main():
     x_train, x_test, y_train, y_test = train_test_split(
         x, y, test_size=0.3, random_state=42
     )
+
+    print("Different ocean proximities train: ", x_train["ocean_proximity"].nunique())
+    print("Different ocean proximities test: ", x_test["ocean_proximity"].nunique())
     # Create the regressor model
     regressor = Regressor(x_train)
 
     # fit the model based on our held out training set
     regressor.fit(x_train, y_train)
+    print(x_train.shape)
     # save it for later
     # save_regressor(regressor)
     # regressor = load_regressor()
@@ -446,7 +499,7 @@ def example_main():
     error = regressor.score(x_test, y_test)
     print("\nRegressor error: {}\n".format(error))
 
-    #RegressorHyperParameterSearch(x_train, y_train)
+    RegressorHyperParameterSearch(x_train, y_train)
 
 
 if __name__ == "__main__":
