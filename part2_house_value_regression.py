@@ -17,7 +17,7 @@ class Regressor(nn.Module):
     def __init__(
         self,
         x=None,
-        nb_epochs=500,
+        nb_epoch=500,
         size_of_batches=128,
         hidden_layer_2=64,
         hidden_layer_3=25,
@@ -53,10 +53,10 @@ class Regressor(nn.Module):
         self.dropout_layer_1 = dropout_layer_1
         self.dropout_layer_2 = dropout_layer_2
         self.output_size = 1
-        self.nb_epochs = nb_epochs
+        self.nb_epoch = nb_epoch
         self.size_of_batches = size_of_batches
         # self.param_grid = {
-        #     "nb_epochs": [x for x in range(200, 1100, 100)],
+        #     "nb_epoch": [x for x in range(200, 1100, 100)],
         #     "size_of_batches": [32 * 2 ** n for n in range (0, 4)],
         #     "hidden_layer_2": [x for x in range(10, 110, 10)],
         #     "hidden_layer_3": [x for x in range(10, 110, 10)],
@@ -64,10 +64,10 @@ class Regressor(nn.Module):
         #     "dropout_layer_2": list(np.arange(0.2, 0.55, 0.05))
         # }
         self.param_grid = {
-            "nb_epochs": [400],
+            "nb_epoch": [300, 400, 500],
             "size_of_batches": [32, 64, 128],
-            "hidden_layer_2": [64],
-            "hidden_layer_3": [25],
+            "hidden_layer_2": [16, 32, 64],
+            "hidden_layer_3": [8, 16, 25],
             "dropout_layer_1": [0.2],
             "dropout_layer_2": [0.2],
         }
@@ -101,7 +101,7 @@ class Regressor(nn.Module):
     # get_params method implemented in estimator to make gridsearchCV function
     def get_params(self, deep=True):
         return {
-            "nb_epochs": self.nb_epochs,
+            "nb_epoch": self.nb_epoch,
             "size_of_batches": self.size_of_batches,
             "hidden_layer_2": self.hidden_layer_2,
             "hidden_layer_3": self.hidden_layer_3,
@@ -112,7 +112,7 @@ class Regressor(nn.Module):
     # set params method for gridsearchCV function
     def set_params(
         self,
-        nb_epochs,
+        nb_epoch,
         size_of_batches,
         hidden_layer_2,
         hidden_layer_3,
@@ -120,7 +120,7 @@ class Regressor(nn.Module):
         dropout_layer_2,
     ):
 
-        self.nb_epochs = nb_epochs
+        self.nb_epoch = nb_epoch
         self.size_of_batches = size_of_batches
         self.hidden_layer_2 = hidden_layer_2
         self.hidden_layer_3 = hidden_layer_3
@@ -267,7 +267,7 @@ class Regressor(nn.Module):
         min_loss = float("inf")
         early_stop_counter = 0
 
-        for epoch in range(self.nb_epochs):
+        for epoch in range(self.nb_epoch):
             # shuffle split the dataset into specific number of batches
             X, Y = self.shuffle_data(X, Y)
 
@@ -323,7 +323,7 @@ class Regressor(nn.Module):
                 print("Finished tuning. Results: ")
                 print(
                     "   With params set to: Epochs: ",
-                    self.nb_epochs,
+                    self.nb_epoch,
                     ", Batch Size: ",
                     self.size_of_batches,
                     ", and others: ",
@@ -333,11 +333,11 @@ class Regressor(nn.Module):
                 print(f"   Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss, "\n")
                 return self
 
-            if epoch == self.nb_epochs - 1:
+            if epoch == self.nb_epoch - 1:
                 print("Finished tuning. Results: ")
                 print(
                     "   With params set to: Epochs: ",
-                    self.nb_epochs,
+                    self.nb_epoch,
                     ", Batch Size: ",
                     self.size_of_batches,
                     ", and others: ",
