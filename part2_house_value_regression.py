@@ -21,8 +21,6 @@ class Regressor(nn.Module):
         size_of_batches=128,
         hidden_layer_2=64,
         hidden_layer_3=25,
-        dropout_layer_1=0.2,
-        dropout_layer_2=0.2,
     ):
 
         # You can add any input parameters you need
@@ -50,26 +48,14 @@ class Regressor(nn.Module):
         self.input_size = 12
         self.hidden_layer_2 = hidden_layer_2
         self.hidden_layer_3 = hidden_layer_3
-        self.dropout_layer_1 = dropout_layer_1
-        self.dropout_layer_2 = dropout_layer_2
         self.output_size = 1
         self.nb_epoch = nb_epoch
         self.size_of_batches = size_of_batches
-        # self.param_grid = {
-        #     "nb_epoch": [x for x in range(200, 1100, 100)],
-        #     "size_of_batches": [32 * 2 ** n for n in range (0, 4)],
-        #     "hidden_layer_2": [x for x in range(10, 110, 10)],
-        #     "hidden_layer_3": [x for x in range(10, 110, 10)],
-        #     "dropout_layer_1": list(np.arange(0.2, 0.55, 0.05)),
-        #     "dropout_layer_2": list(np.arange(0.2, 0.55, 0.05))
-        # }
         self.param_grid = {
             "nb_epoch": [500, 750, 1000],
             "size_of_batches": [32, 64, 128],
             "hidden_layer_2": [32, 64],
             "hidden_layer_3": [16, 25],
-            "dropout_layer_1": [0.2],
-            "dropout_layer_2": [0.2],
         }
 
         # sample for the model that we want to create
@@ -84,10 +70,8 @@ class Regressor(nn.Module):
     def instantiate_model(self):
         self.model = nn.Sequential(
             nn.Linear(self.input_size, self.hidden_layer_2),
-            nn.Dropout(self.dropout_layer_1),
             nn.ReLU(),
             nn.Linear(self.hidden_layer_2, self.hidden_layer_3),
-            nn.Dropout(self.dropout_layer_2),
             nn.ReLU(),
             nn.Linear(self.hidden_layer_3, self.output_size),
         )
@@ -104,9 +88,7 @@ class Regressor(nn.Module):
             "nb_epoch": self.nb_epoch,
             "size_of_batches": self.size_of_batches,
             "hidden_layer_2": self.hidden_layer_2,
-            "hidden_layer_3": self.hidden_layer_3,
-            "dropout_layer_1": self.dropout_layer_1,
-            "dropout_layer_2": self.dropout_layer_2,
+            "hidden_layer_3": self.hidden_layer_3
         }
 
     # set params method for gridsearchCV function
@@ -115,17 +97,13 @@ class Regressor(nn.Module):
         nb_epoch,
         size_of_batches,
         hidden_layer_2,
-        hidden_layer_3,
-        dropout_layer_1,
-        dropout_layer_2,
+        hidden_layer_3
     ):
 
         self.nb_epoch = nb_epoch
         self.size_of_batches = size_of_batches
         self.hidden_layer_2 = hidden_layer_2
         self.hidden_layer_3 = hidden_layer_3
-        self.dropout_layer_1 = dropout_layer_1
-        self.dropout_layer_2 = dropout_layer_2
 
         return self
 
