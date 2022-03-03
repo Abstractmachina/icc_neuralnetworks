@@ -64,10 +64,10 @@ class Regressor(nn.Module):
         #     "dropout_layer_2": list(np.arange(0.2, 0.55, 0.05))
         # }
         self.param_grid = {
-            "nb_epoch": [300, 400, 500],
+            "nb_epoch": [500, 750, 1000],
             "size_of_batches": [32, 64, 128],
-            "hidden_layer_2": [16, 32, 64],
-            "hidden_layer_3": [8, 16, 25],
+            "hidden_layer_2": [32, 64],
+            "hidden_layer_3": [16, 25],
             "dropout_layer_1": [0.2],
             "dropout_layer_2": [0.2],
         }
@@ -319,8 +319,8 @@ class Regressor(nn.Module):
                 early_stop_counter += 1
 
             # if you hit early stopping counter, end loop
-            if early_stop_counter == 5000:
-                print("Finished tuning. Results: ")
+            if early_stop_counter == 150:
+                '''print("Finished tuning. Results: ")
                 print(
                     "   With params set to: Epochs: ",
                     self.nb_epoch,
@@ -330,11 +330,12 @@ class Regressor(nn.Module):
                     self.hidden_layer_2,
                     self.hidden_layer_3,
                 )
-                print(f"   Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss, "\n")
+                print(f"   Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss, "\n")'''
+                print("Number of epochs: ", epoch)
                 return self
 
-            if epoch == self.nb_epoch - 1:
-                print("Finished tuning. Results: ")
+            #if epoch == self.nb_epoch - 1:
+                '''print("Finished tuning. Results: ")
                 print(
                     "   With params set to: Epochs: ",
                     self.nb_epoch,
@@ -344,7 +345,8 @@ class Regressor(nn.Module):
                     self.hidden_layer_2,
                     self.hidden_layer_3,
                 )
-                print(f"   Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss, "\n")
+                print(f"   Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss, "\n")'''
+
 
         return self
 
@@ -411,6 +413,17 @@ class Regressor(nn.Module):
             y_predictions["gold"] - y_predictions["predicted"]
         ).apply(abs)
         #print(y_predictions[["gold", "predicted"]])
+        print("Finished tuning. Results: ")
+        print(
+            "   With params set to: Epochs: ",
+            self.nb_epoch,
+            ", Batch Size: ",
+            self.size_of_batches,
+            ", and others: ",
+            self.hidden_layer_2,
+            self.hidden_layer_3,
+        )
+        print("       Score on test set: ", mean_squared_error(y, y_hat) ** 0.5)
         return mean_squared_error(y, y_hat) ** 0.5
 
         #######################################################################
