@@ -7,7 +7,7 @@ import pickle
 import numpy as np
 from numpy.random import default_rng
 import pandas as pd
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.preprocessing import StandardScaler, MinMaxScaler, OneHotEncoder
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
@@ -56,7 +56,7 @@ class Regressor(nn.Module):
         self.nb_epochs = nb_epochs
         self.size_of_batches = size_of_batches
         # self.param_grid = {
-        #     "number_of_epochs": [x for x in range(200, 1100, 100)],
+        #     "nb_epochs": [x for x in range(200, 1100, 100)],
         #     "size_of_batches": [32 * 2 ** n for n in range (0, 4)],
         #     "hidden_layer_2": [x for x in range(10, 110, 10)],
         #     "hidden_layer_3": [x for x in range(10, 110, 10)],
@@ -64,7 +64,7 @@ class Regressor(nn.Module):
         #     "dropout_layer_2": list(np.arange(0.2, 0.55, 0.05))
         # }
         self.param_grid = {
-            "number_of_epochs": [200],
+            "nb_epochs": [200],
             "size_of_batches": [32],
             "hidden_layer_2": [50],
             "hidden_layer_3": [20],
@@ -101,7 +101,7 @@ class Regressor(nn.Module):
     # get_params method implemented in estimator to make gridsearchCV function
     def get_params(self, deep=True):
         return {
-            "nb_epochs": self.number_of_epochs,
+            "nb_epochs": self.nb_epochs,
             "size_of_batches": self.size_of_batches,
             "hidden_layer_2": self.hidden_layer_2,
             "hidden_layer_3": self.hidden_layer_3,
@@ -188,9 +188,14 @@ class Regressor(nn.Module):
         # this is so that if a dataset doesn't contain some of the values by chance, the 
         # processed matrix still contains the right number of columns
 
-        op_categories = ["area_<1H OCEAN", "area_INLAND", "area_ISLAND", "area_NEAR BAY","area_NEAR OCEAN"]
-        
-        one_hot_area = pd.get_dummies(categories = [op_categories(i) for i in range(5)], prefix="area")
+        op_categories = ["<1H OCEAN", "INLAND", "ISLAND", "NEAR BAY", "NEAR OCEAN"]
+        #encoder = OneHotEncoder(categories=op_categories)
+        #print(encoder.categories)
+        #one_hot_area = encoder.fit_transform(x["ocean_proximity"])
+        #print(one_hot_area)
+
+        one_hot_area = pd.get_dummies(x["ocean_proximity"], prefix="area")
+
         x = x.drop(["ocean_proximity"], axis=1)
 
         # Scale x
@@ -321,7 +326,7 @@ class Regressor(nn.Module):
                 print("Finished tuning. Results: ")
                 print(
                     "With params set to: Epochs: ",
-                    self.number_of_epochs,
+                    self.nb_epochs,
                     ", Batch Size: ",
                     self.size_of_batches,
                     ", and others: ",
@@ -331,11 +336,11 @@ class Regressor(nn.Module):
                 print(f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
                 return self
 
-            if epoch == self.number_of_epochs - 1:
+            if epoch == self.nb_epochs - 1:
                 print("Finished tuning. Results: ")
                 print(
                     "With params set to: Epochs: ",
-                    self.number_of_epochs,
+                    self.nb_epochs,
                     ", Batch Size: ",
                     self.size_of_batches,
                     ", and others: ",
