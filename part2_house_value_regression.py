@@ -64,10 +64,10 @@ class Regressor(nn.Module):
         #     "dropout_layer_2": list(np.arange(0.2, 0.55, 0.05))
         # }
         self.param_grid = {
-            "nb_epochs": [200],
-            "size_of_batches": [32],
-            "hidden_layer_2": [50],
-            "hidden_layer_3": [20],
+            "nb_epochs": [400],
+            "size_of_batches": [32, 64, 128],
+            "hidden_layer_2": [64],
+            "hidden_layer_3": [25],
             "dropout_layer_1": [0.2],
             "dropout_layer_2": [0.2],
         }
@@ -184,17 +184,14 @@ class Regressor(nn.Module):
         )
 
         # add one hot encoding to allow the model to work with text categories
-        # First create a list of strings containing all possibel values in the ocean_proximity column
+        # First create a list of strings containing all possible values in the ocean_proximity column
         # this is so that if a dataset doesn't contain some of the values by chance, the 
         # processed matrix still contains the right number of columns
 
-        op_categories = ["<1H OCEAN", "INLAND", "ISLAND", "NEAR BAY", "NEAR OCEAN"]
-        #encoder = OneHotEncoder(categories=op_categories)
-        #print(encoder.categories)
-        #one_hot_area = encoder.fit_transform(x["ocean_proximity"])
-        #print(one_hot_area)
+        op_categories = ['area_<1H OCEAN', 'area_INLAND', 'area_ISLAND', 'area_NEAR BAY', 'area_NEAR OCEAN']
 
         one_hot_area = pd.get_dummies(x["ocean_proximity"], prefix="area")
+        one_hot_area = one_hot_area.reindex(columns=op_categories, fill_value=0)
 
         x = x.drop(["ocean_proximity"], axis=1)
 
@@ -325,7 +322,7 @@ class Regressor(nn.Module):
             if early_stop_counter == 5000:
                 print("Finished tuning. Results: ")
                 print(
-                    "With params set to: Epochs: ",
+                    "   With params set to: Epochs: ",
                     self.nb_epochs,
                     ", Batch Size: ",
                     self.size_of_batches,
@@ -333,13 +330,13 @@ class Regressor(nn.Module):
                     self.hidden_layer_2,
                     self.hidden_layer_3,
                 )
-                print(f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
+                print(f"   Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss, "\n")
                 return self
 
             if epoch == self.nb_epochs - 1:
                 print("Finished tuning. Results: ")
                 print(
-                    "With params set to: Epochs: ",
+                    "   With params set to: Epochs: ",
                     self.nb_epochs,
                     ", Batch Size: ",
                     self.size_of_batches,
@@ -347,7 +344,7 @@ class Regressor(nn.Module):
                     self.hidden_layer_2,
                     self.hidden_layer_3,
                 )
-                print(f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
+                print(f"   Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss, "\n")
 
         return self
 
