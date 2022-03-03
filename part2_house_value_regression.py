@@ -13,9 +13,9 @@ from sklearn.model_selection import GridSearchCV
 
 class Regressor(nn.Module):
     def __init__(
-        self, x=None, number_of_epochs=1000, 
-        size_of_batches=128, learn_rate=0.2, 
-        hidden_layer_2=40, hidden_layer_3=20):
+        self, x=None, number_of_epochs=400, 
+        size_of_batches=128, learn_rate=0.1, 
+        hidden_layer_2=64, hidden_layer_3=25):
 
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
@@ -47,11 +47,11 @@ class Regressor(nn.Module):
         self.size_of_batches = size_of_batches
         self.learn_rate = learn_rate
         self.param_grid = {
-            "number_of_epochs": [200],
+            "number_of_epochs": [400],
             "learn_rate": [0.1],
             "size_of_batches": [128],
-            "hidden_layer_2": [12],
-            "hidden_layer_3": [12]
+            "hidden_layer_2": [64],
+            "hidden_layer_3": [25]
         }
 
         # sample for the model that we want to create
@@ -271,21 +271,27 @@ class Regressor(nn.Module):
             epoch_loss = criterion(y_predictions, y_val_tensor)
             epoch_rmse_loss = criterion(y_predictions_a, y_gold_a)**0.5
 
-            if epoch % 10 == 0:
-                print("Epoch ", epoch, f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
+            #if epoch % 10 == 0:
+                # print("Epoch ", epoch, f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
 
             # save model every time it improves, and don't save models that haven't improved
             if epoch_loss < min_loss:
-                save_regressor(self)
                 min_loss = epoch_loss
                 early_stop_counter = 0
             else:
                 early_stop_counter += 1
             
             # if you hit early stopping counter, end loop
-            if early_stop_counter == 100:
-                print("I'm done boi, counter is at: ", early_stop_counter)
+            if early_stop_counter == 50:
+                print("Finished tuning. Results: ")
+                print("With params set to: Epochs: ", self.number_of_epochs, ", Batch Size: ", self.size_of_batches, ", LR: ", self.learn_rate, ", and others: ", self.hidden_layer_2, self.hidden_layer_3)
+                print(f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
                 return self
+            
+            if epoch == self.number_of_epochs-1:
+                print("Finished tuning. Results: ")
+                print("With params set to: Epochs: ", self.number_of_epochs, ", Batch Size: ", self.size_of_batches, ", LR: ", self.learn_rate, ", and others: ", self.hidden_layer_2, self.hidden_layer_3)
+                print(f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
 
         return self
 
