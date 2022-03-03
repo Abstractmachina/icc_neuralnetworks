@@ -184,7 +184,13 @@ class Regressor(nn.Module):
         )
 
         # add one hot encoding to allow the model to work with text categories
-        one_hot_area = pd.get_dummies(x["ocean_proximity"], prefix="area")
+        # First create a list of strings containing all possibel values in the ocean_proximity column
+        # this is so that if a dataset doesn't contain some of the values by chance, the 
+        # processed matrix still contains the right number of columns
+
+        op_categories = ["area_<1H OCEAN", "area_INLAND", "area_ISLAND", "area_NEAR BAY","area_NEAR OCEAN"]
+        
+        one_hot_area = pd.get_dummies(categories = [op_categories(i) for i in range(5)], prefix="area")
         x = x.drop(["ocean_proximity"], axis=1)
 
         # Scale x
