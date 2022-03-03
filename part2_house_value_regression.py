@@ -1,5 +1,5 @@
 import torch
-from torch import nn
+from torch import dropout, nn
 from torch.optim.lr_scheduler import ExponentialLR
 import pickle
 import numpy as np
@@ -13,9 +13,15 @@ from sklearn.model_selection import GridSearchCV
 
 class Regressor(nn.Module):
     def __init__(
-        self, x=None, number_of_epochs=400, 
-        size_of_batches=128, learn_rate=0.1, 
-        hidden_layer_2=64, hidden_layer_3=25):
+        self,
+        x=None,
+        number_of_epochs=400,
+        size_of_batches=128,
+        hidden_layer_2=64,
+        hidden_layer_3=25,
+        dropout_layer_1=0.2,
+        dropout_layer_2=0.2,
+    ):
 
         # You can add any input parameters you need
         # Remember to set them with a default value for LabTS tests
@@ -42,16 +48,26 @@ class Regressor(nn.Module):
         self.input_size = 12
         self.hidden_layer_2 = hidden_layer_2
         self.hidden_layer_3 = hidden_layer_3
+        self.dropout_layer_1 = dropout_layer_1
+        self.dropout_layer_2 = dropout_layer_2
         self.output_size = 1
         self.number_of_epochs = number_of_epochs
         self.size_of_batches = size_of_batches
-        self.learn_rate = learn_rate
+        # self.param_grid = {
+        #     "number_of_epochs": [x for x in range(200, 1100, 100)],
+        #     "size_of_batches": [32 * 2 ** n for n in range (0, 4)],
+        #     "hidden_layer_2": [x for x in range(10, 110, 10)],
+        #     "hidden_layer_3": [x for x in range(10, 110, 10)],
+        #     "dropout_layer_1": list(np.arange(0.2, 0.55, 0.05)),
+        #     "dropout_layer_2": list(np.arange(0.2, 0.55, 0.05))
+        # }
         self.param_grid = {
-            "number_of_epochs": [400],
-            "learn_rate": [0.1],
-            "size_of_batches": [128],
-            "hidden_layer_2": [64],
-            "hidden_layer_3": [25]
+            "number_of_epochs": [200],
+            "size_of_batches": [32],
+            "hidden_layer_2": [50],
+            "hidden_layer_3": [20],
+            "dropout_layer_1": [0.2],
+            "dropout_layer_2": [0.2],
         }
 
         # sample for the model that we want to create
@@ -66,12 +82,12 @@ class Regressor(nn.Module):
     def instantiate_model(self):
         self.model = nn.Sequential(
             nn.Linear(self.input_size, self.hidden_layer_2),
-            nn.Dropout(p=0),  # i.e. dropout currently doing nothing.
+            nn.Dropout(self.dropout_layer_1),
             nn.ReLU(),
             nn.Linear(self.hidden_layer_2, self.hidden_layer_3),
-            nn.Dropout(p=0),  # also doing nothing here
+            nn.Dropout(self.dropout_layer_2),
             nn.ReLU(),
-            nn.Linear(self.hidden_layer_3, self.output_size)
+            nn.Linear(self.hidden_layer_3, self.output_size),
         )
 
     def shuffle_data(self, x, y):
@@ -83,25 +99,33 @@ class Regressor(nn.Module):
     # get_params method implemented in estimator to make gridsearchCV function
     def get_params(self, deep=True):
         return {
-            "number_of_epochs": self.number_of_epochs, 
-            "learn_rate": self.learn_rate, 
+            "number_of_epochs": self.number_of_epochs,
             "size_of_batches": self.size_of_batches,
             "hidden_layer_2": self.hidden_layer_2,
-            "hidden_layer_3": self.hidden_layer_3
+            "hidden_layer_3": self.hidden_layer_3,
+            "dropout_layer_1": self.dropout_layer_1,
+            "dropout_layer_2": self.dropout_layer_2,
         }
 
-    #set params method for gridsearchCV function
-    def set_params(self, number_of_epochs, size_of_batches,
-        learn_rate, hidden_layer_2, hidden_layer_3):
+    # set params method for gridsearchCV function
+    def set_params(
+        self,
+        number_of_epochs,
+        size_of_batches,
+        hidden_layer_2,
+        hidden_layer_3,
+        dropout_layer_1,
+        dropout_layer_2,
+    ):
 
         self.number_of_epochs = number_of_epochs
         self.size_of_batches = size_of_batches
-        self.learn_rate = learn_rate
         self.hidden_layer_2 = hidden_layer_2
         self.hidden_layer_3 = hidden_layer_3
+        self.dropout_layer_1 = dropout_layer_1
+        self.dropout_layer_2 = dropout_layer_2
 
         return self
-
 
     def _preprocessor(self, x, y=None, training=False):
         """
@@ -217,25 +241,25 @@ class Regressor(nn.Module):
         )
 
         # choose model optimiser, lr decay function, and loss function
-        optimiser = torch.optim.Adam(self.model.parameters(), lr=self.learn_rate)
-        scheduler = ExponentialLR(optimiser, gamma=0.9)  # for lr decay
+        optimiser = torch.optim.Adam(self.model.parameters())
+        # scheduler = ExponentialLR(optimiser, gamma=0.9)  # for lr decay, now deprecated
         criterion = torch.nn.MSELoss()
 
-        #calculate the number of batches required based on desired batch size
+        # calculate the number of batches required based on desired batch size
         if len(x_train) <= self.size_of_batches:
             number_of_batches = 1
         else:
             number_of_batches = len(x_train) // self.size_of_batches
 
-        # keep track of minimum loss and stop if exceeds a certain 
+        # keep track of minimum loss and stop if exceeds a certain
         # number of epochs without reducing loss
-        min_loss = float('inf')
+        min_loss = float("inf")
         early_stop_counter = 0
 
         for epoch in range(self.number_of_epochs):
             # shuffle split the dataset into specific number of batches
             X, Y = self.shuffle_data(X, Y)
-            
+
             # create batches to be iterated through
             X_batches = np.array_split(X, number_of_batches)
             Y_batches = np.array_split(Y, number_of_batches)
@@ -243,7 +267,7 @@ class Regressor(nn.Module):
             for batch_no in range(number_of_batches):
                 X_batches[batch_no] = torch.from_numpy(X_batches[batch_no]).float()
                 Y_batches[batch_no] = torch.from_numpy(Y_batches[batch_no]).float()
-                
+
                 # Reset the gradients
                 optimiser.zero_grad()
                 # forward pass
@@ -255,24 +279,26 @@ class Regressor(nn.Module):
                 # update parameters
                 optimiser.step()
 
-            scheduler.step()  # this is for the learning rate decay
+            # scheduler.step()  # this was for the learning rate decay, now deprecated
 
             x_val_tensor = torch.from_numpy(x_val).float()
             y_val_tensor = torch.from_numpy(y_val).float()
 
             y_predictions = self.model(x_val_tensor)
 
-            y_predictions_a = self.y_scaler.inverse_transform(y_predictions.detach().numpy())
+            y_predictions_a = self.y_scaler.inverse_transform(
+                y_predictions.detach().numpy()
+            )
             y_gold_a = self.y_scaler.inverse_transform(y_val_tensor.detach().numpy())
 
             y_predictions_a = torch.from_numpy(y_predictions_a).float()
             y_gold_a = torch.from_numpy(y_gold_a).float()
 
             epoch_loss = criterion(y_predictions, y_val_tensor)
-            epoch_rmse_loss = criterion(y_predictions_a, y_gold_a)**0.5
+            epoch_rmse_loss = criterion(y_predictions_a, y_gold_a) ** 0.5
 
-            #if epoch % 10 == 0:
-                # print("Epoch ", epoch, f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
+            # if epoch % 10 == 0:
+            # print("Epoch ", epoch, f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
 
             # save model every time it improves, and don't save models that haven't improved
             if epoch_loss < min_loss:
@@ -280,17 +306,33 @@ class Regressor(nn.Module):
                 early_stop_counter = 0
             else:
                 early_stop_counter += 1
-            
+
             # if you hit early stopping counter, end loop
             if early_stop_counter == 50:
                 print("Finished tuning. Results: ")
-                print("With params set to: Epochs: ", self.number_of_epochs, ", Batch Size: ", self.size_of_batches, ", LR: ", self.learn_rate, ", and others: ", self.hidden_layer_2, self.hidden_layer_3)
+                print(
+                    "With params set to: Epochs: ",
+                    self.number_of_epochs,
+                    ", Batch Size: ",
+                    self.size_of_batches,
+                    ", and others: ",
+                    self.hidden_layer_2,
+                    self.hidden_layer_3,
+                )
                 print(f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
                 return self
-            
-            if epoch == self.number_of_epochs-1:
+
+            if epoch == self.number_of_epochs - 1:
                 print("Finished tuning. Results: ")
-                print("With params set to: Epochs: ", self.number_of_epochs, ", Batch Size: ", self.size_of_batches, ", LR: ", self.learn_rate, ", and others: ", self.hidden_layer_2, self.hidden_layer_3)
+                print(
+                    "With params set to: Epochs: ",
+                    self.number_of_epochs,
+                    ", Batch Size: ",
+                    self.size_of_batches,
+                    ", and others: ",
+                    self.hidden_layer_2,
+                    self.hidden_layer_3,
+                )
                 print(f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
 
         return self
@@ -373,7 +415,7 @@ def save_regressor(trained_model):
     # If you alter this, make sure it works in tandem with load_regressor
     with open("part2_model.pickle", "wb") as target:
         pickle.dump(trained_model, target)
-    #print("\nSaved model in part2_model.pickle\n")
+    # print("\nSaved model in part2_model.pickle\n")
 
 
 def load_regressor():
@@ -405,14 +447,14 @@ def RegressorHyperParameterSearch(x_train, y_train):
     #                       ** START OF YOUR CODE **
     #######################################################################
 
-    # This is the basic format of the gridsearchcv that I found on their 
+    # This is the basic format of the gridsearchcv that I found on their
     # tutorial page, here: https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html.
     regressor = Regressor(x_train)
 
     hyperparameter_tuner = GridSearchCV(regressor, regressor.param_grid, cv=5)
     hyperparameter_tuner.fit(x_train, y_train)
     print(type(hyperparameter_tuner))
-    #hyperparameter_tuner.fit(x_train, y_train)
+    # hyperparameter_tuner.fit(x_train, y_train)
 
     print(sorted(hyperparameter_tuner.cv_results_))
 
@@ -454,7 +496,7 @@ def example_main():
     error = regressor.score(x_test, y_test)
     print("\nRegressor error: {}\n".format(error))
 
-    #RegressorHyperParameterSearch(x_train, y_train)
+    RegressorHyperParameterSearch(x_train, y_train)
 
 
 if __name__ == "__main__":
