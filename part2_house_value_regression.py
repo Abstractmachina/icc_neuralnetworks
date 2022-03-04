@@ -12,6 +12,8 @@ from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import GridSearchCV
 
+import graphs
+
 
 class Regressor(nn.Module):
     def __init__(
@@ -51,11 +53,17 @@ class Regressor(nn.Module):
         self.output_size = 1
         self.nb_epoch = nb_epoch
         self.size_of_batches = size_of_batches
+        # self.param_grid = {
+        #     "nb_epoch": [500, 750, 1000],
+        #     "size_of_batches": [32, 64, 128],
+        #     "hidden_layer_2": [4, 8, 12, 16],
+        #     "hidden_layer_3": [4, 8, 12, 16],
+        # }
         self.param_grid = {
-            "nb_epoch": [500, 750, 1000],
-            "size_of_batches": [32, 64, 128],
-            "hidden_layer_2": [32, 64],
-            "hidden_layer_3": [16, 25],
+            "nb_epoch": [500, 750],
+            "size_of_batches": [32, 64],
+            "hidden_layer_2": [4, 8],
+            "hidden_layer_3": [4, 8],
         }
 
         # sample for the model that we want to create
@@ -223,6 +231,20 @@ class Regressor(nn.Module):
         self.input_size = X.shape[1]
         self.instantiate_model()
 
+
+        #========================================================
+        #PLOTTING SETUP
+        collector = graphs.PlotDataCollector()
+        
+        featureLabels = ['longitude', 'latitude', 'housing_median_age', 
+                        'rooms_per_household', 'bedrooms_per_household', 
+                        'residents_per_household', 'median_income', 
+                        'median_house_value', 'area_<1H OCEAN', 'area_INLAND', 
+                        'area_ISLAND', 'area_NEAR BAY', 'area_NEAR OCEAN']
+        collector.addTrainingData(X, featureLabels)
+        #collector.simpleGraph([1,2,3], [4,3,2])
+        #========================================================
+
         # separate out a validation set to use for checking loss at each epoch.
         x_train, x_val, y_train, y_val = train_test_split(
             X, Y, test_size=0.25, random_state=42
@@ -285,10 +307,11 @@ class Regressor(nn.Module):
 
             epoch_loss = criterion(y_predictions, y_val_tensor)
             epoch_rmse_loss = criterion(y_predictions_a, y_gold_a) ** 0.5
-
+            collector.addLoss(epoch_loss.item())
             '''if epoch % 100 == 0:
                 print("Epoch ", epoch, f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)'''
 
+           
             # save model every time it improves, and don't save models that haven't improved
             if epoch_loss < min_loss:
                 min_loss = epoch_loss
@@ -401,8 +424,15 @@ class Regressor(nn.Module):
             self.hidden_layer_2,
             self.hidden_layer_3,
         )
-        print("       Score on test set: ", mean_squared_error(y, y_hat) ** 0.5)
-        return mean_squared_error(y, y_hat) ** 0.5
+        mseError = mean_squared_error(y, y_hat) ** 0.5
+        print("       Score on test set: ", mseError)
+
+        result = {'epochs': self.nb_epoch, 'batchSize' : self.size_of_batches, 
+        'neurons': [self.hidden_layer_2, self.hidden_layer_3], 'regressionError' : mseError }
+
+        graphs.PlotDataCollector.saveTuningResults(result, "resultsB.json")
+
+        return mseError
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -467,6 +497,7 @@ def RegressorHyperParameterSearch(x_train, y_train):
 
 
 def example_main():
+    
 
     output_label = "median_house_value"
 
@@ -501,6 +532,7 @@ def example_main():
 
     RegressorHyperParameterSearch(x_train, y_train)
 
+    print(graphs.PlotDataCollector.loadResults())
 
 if __name__ == "__main__":
     example_main()
