@@ -64,6 +64,7 @@ class Regressor(nn.Module):
             "size_of_batches": [32, 64, 128],
             "hidden_layer_2": [10, 20, 40],
             "hidden_layer_3": [8, 16, 24],
+
         }
 
         # will trigger grid search to report negative RMSE
