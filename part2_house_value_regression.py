@@ -17,10 +17,10 @@ class Regressor(nn.Module):
     def __init__(
         self,
         x=None,
-        nb_epoch=500,
+        nb_epoch=300,
         size_of_batches=128,
-        hidden_layer_2=64,
-        hidden_layer_3=25,
+        hidden_layer_2=30,
+        hidden_layer_3=15
     ):
 
         # You can add any input parameters you need
@@ -52,11 +52,16 @@ class Regressor(nn.Module):
         self.nb_epoch = nb_epoch
         self.size_of_batches = size_of_batches
         self.param_grid = {
-            "nb_epoch": [500, 750, 1000],
+            "nb_epoch": [300, 500, 700],
             "size_of_batches": [32, 64, 128],
-            "hidden_layer_2": [32, 64],
-            "hidden_layer_3": [16, 25],
+            "hidden_layer_2": [10, 20, 40],
+            "hidden_layer_3": [8, 16, 24],
         }
+
+        # will trigger grid search to report negative RMSE
+        # as the gridsearch function chooses based on highest
+        # reported value from score. 
+        self.in_grid_search = False
 
         # sample for the model that we want to create
         self.model = None
@@ -104,6 +109,7 @@ class Regressor(nn.Module):
         self.size_of_batches = size_of_batches
         self.hidden_layer_2 = hidden_layer_2
         self.hidden_layer_3 = hidden_layer_3
+        self.in_grid_search = True
 
         return self
 
@@ -129,7 +135,6 @@ class Regressor(nn.Module):
         #######################################################################
         #                       ** START OF YOUR CODE **
         #######################################################################
-
         # This filters out certain columns in Score, but not in predict.
         if y is not None:
             # merge the two, drop the outlying house values
@@ -142,7 +147,6 @@ class Regressor(nn.Module):
 
         # We're going to fill the nan values with the average value of the column
         x = x.fillna(x.mean())
-
         # getting the per-household values as these are more insightful
         x["total_rooms"] = x["total_rooms"] / x["households"]
         x["total_bedrooms"] = x["total_bedrooms"] / x["households"]
@@ -286,8 +290,8 @@ class Regressor(nn.Module):
             epoch_loss = criterion(y_predictions, y_val_tensor)
             epoch_rmse_loss = criterion(y_predictions_a, y_gold_a) ** 0.5
 
-            '''if epoch % 100 == 0:
-                print("Epoch ", epoch, f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)'''
+            #if epoch % 10 == 0:
+                #print("Epoch ", epoch, f" Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss)
 
             # save model every time it improves, and don't save models that haven't improved
             if epoch_loss < min_loss:
@@ -298,33 +302,7 @@ class Regressor(nn.Module):
 
             # if you hit early stopping counter, end loop
             if early_stop_counter == 150:
-                '''print("Finished tuning. Results: ")
-                print(
-                    "   With params set to: Epochs: ",
-                    self.nb_epoch,
-                    ", Batch Size: ",
-                    self.size_of_batches,
-                    ", and others: ",
-                    self.hidden_layer_2,
-                    self.hidden_layer_3,
-                )
-                print(f"   Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss, "\n")'''
-                print("Number of epochs: ", epoch)
                 return self
-
-            #if epoch == self.nb_epoch - 1:
-                '''print("Finished tuning. Results: ")
-                print(
-                    "   With params set to: Epochs: ",
-                    self.nb_epoch,
-                    ", Batch Size: ",
-                    self.size_of_batches,
-                    ", and others: ",
-                    self.hidden_layer_2,
-                    self.hidden_layer_3,
-                )
-                print(f"   Loss: {epoch_loss:.4f}", ", ", epoch_rmse_loss, "\n")'''
-
 
         return self
 
@@ -385,12 +363,16 @@ class Regressor(nn.Module):
 
         y_hat = pd.DataFrame(self.predict(x))
 
-        y_predictions = pd.merge(y_hat, y, left_index=True, right_index=True)
+        # TODO : delete this bit
+
+        '''y_predictions = pd.merge(y_hat, y, left_index=True, right_index=True)
         y_predictions.columns = ["predicted", "gold"]
         y_predictions["difference"] = (
             y_predictions["gold"] - y_predictions["predicted"]
         ).apply(abs)
-        #print(y_predictions[["gold", "predicted"]])
+        #print(y_predictions[["gold", "predicted"]])'''
+
+        print("In grid search: ", self.in_grid_search)
         print("Finished tuning. Results: ")
         print(
             "   With params set to: Epochs: ",
@@ -401,8 +383,14 @@ class Regressor(nn.Module):
             self.hidden_layer_2,
             self.hidden_layer_3,
         )
-        print("       Score on test set: ", mean_squared_error(y, y_hat) ** 0.5)
-        return mean_squared_error(y, y_hat) ** 0.5
+        
+        rmse_loss = mean_squared_error(y, y_hat) ** 0.5
+        if self.in_grid_search == False:
+            print("       Score on test set: ", rmse_loss)
+            return rmse_loss
+        else:
+            print("       Score on test set: ", rmse_loss*-1)
+            return rmse_loss*-1
 
         #######################################################################
         #                       ** END OF YOUR CODE **
@@ -447,19 +435,22 @@ def RegressorHyperParameterSearch(x_train, y_train):
     #######################################################################
     #                       ** START OF YOUR CODE **
     #######################################################################
-
-    # This is the basic format of the gridsearchcv that I found on their
-    # tutorial page, here: https://scikit-learn.org/stable/modules/generated/sklearn.model_selection.GridSearchCV.html.
     regressor = Regressor(x_train)
+    print("For newly created regressor: in grid: ", regressor.in_grid_search)
 
-    hyperparameter_tuner = GridSearchCV(regressor, regressor.param_grid, cv=2)
+    hyperparameter_tuner = GridSearchCV(regressor, regressor.param_grid, cv=3)
+
     hyperparameter_tuner.fit(x_train, y_train)
-    print(type(hyperparameter_tuner))
-    # hyperparameter_tuner.fit(x_train, y_train)
+    print(hyperparameter_tuner.best_params_)
 
-    print(sorted(hyperparameter_tuner.cv_results_))
+    # Save the best estimator with the best hyperparameters
+    best_model = hyperparameter_tuner.best_estimator_
 
-    return  # Return the chosen hyper parameters
+    save_regressor(best_model)
+
+    #return hyperparameter_tuner.best_params_, hyperparameter_tuner.best_estimator_
+
+    return  hyperparameter_tuner.best_params_
 
     #######################################################################
     #                       ** END OF YOUR CODE **
@@ -483,24 +474,22 @@ def example_main():
         x, y, test_size=0.3, random_state=42
     )
 
-    print("Different ocean proximities train: ", x_train["ocean_proximity"].nunique())
-    print("Different ocean proximities test: ", x_test["ocean_proximity"].nunique())
     # Create the regressor model
     regressor = Regressor(x_train)
 
     # fit the model based on our held out training set
     regressor.fit(x_train, y_train)
-    print(x_train.shape)
-    # save it for later
-    # save_regressor(regressor)
-    # regressor = load_regressor()
 
     # Error
     error = regressor.score(x_test, y_test)
     print("\nRegressor error: {}\n".format(error))
 
     RegressorHyperParameterSearch(x_train, y_train)
-
+    best_regressor = load_regressor()
+    print("In saved best model, grid search: ", best_regressor.in_grid_search)
+    print("In saved best model, params: ", best_regressor.nb_epoch, best_regressor.hidden_layer_2, best_regressor.hidden_layer_3)
+    error = best_regressor.score(x_test, y_test)
+    print("\nBest Regressor error: {}\n".format(error))
 
 if __name__ == "__main__":
     example_main()
